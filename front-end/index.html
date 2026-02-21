@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Editor Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="main.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="logo"><i class="mdi mdi-vector-polygon"></i><span>VectorPro</span></div>
+    </div>
+
+    <div class="main-container">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-group">
+                <button class="tool-btn active" data-tool="select" title="Select/Resize (V)"><i class="mdi mdi-cursor-default"></i><span class="shortcut">V</span></button>
+                <button class="tool-btn" data-tool="rotate" title="Rotate (O)"><i class="mdi mdi-rotate-right"></i><span class="shortcut">O</span></button>
+            </div>
+            <!-- Drawing Group -->
+            <div class="toolbar-group">
+                <button class="tool-btn" data-tool="polyline" title="Lines Tool (P)"><i class="mdi mdi-vector-polyline"></i><span class="shortcut">P</span></button>
+                <button class="tool-btn" data-tool="arc" title="Arc Tool (A)"><i class="mdi mdi-vector-bezier"></i><span class="shortcut">A</span></button>
+            </div>
+            <!-- Shapes Group -->
+            <div class="toolbar-group">
+                <button class="tool-btn" data-tool="rectangle" title="Rectangle (M)"><i class="mdi mdi-rectangle-outline"></i><span class="shortcut">M</span></button>
+                <button class="tool-btn" data-tool="circle" title="Circle (C)"><i class="mdi mdi-circle-outline"></i><span class="shortcut">C</span></button>
+                <button class="tool-btn" data-tool="polygon" title="Polygon (Y)"><i class="mdi mdi-hexagon-outline"></i><span class="shortcut">Y</span></button>
+            </div>
+        </div>
+
+        <!-- Canvas Area -->
+        <div class="canvas-area">
+            <div class="settings-bar">
+                <div class="settings-group" id="transformSettings" style="display: none;">
+                    <span class="settings-label">X</span>
+                    <input type="number" class="settings-input" id="inputX" value="0">
+                    <span class="settings-label">Y</span>
+                    <input type="number" class="settings-input" id="inputY" value="0">
+                </div>
+                <div class="settings-group" id="shapeSettings" style="display: none;"></div>
+                
+                <!-- Arc Settings -->
+                <div class="settings-group" id="arcSettings" style="display: none;">
+                    <span class="settings-label">Angularity</span>
+                    <div class="switch" id="arcAngularitySwitch" title="Auto Semi-Circle Mode"></div>
+                    <span class="settings-label" style="margin-left: 8px;">Angle</span>
+                    <input type="number" class="settings-input" id="inputArcAngle" value="90" min="1" max="359" style="width: 60px;">
+                    <span class="settings-label">Sweep</span>
+                    <select id="inputArcSweep" class="settings-input" style="width: 70px;">
+                        <option value="1">CW</option>
+                        <option value="0">CCW</option>
+                    </select>
+                </div>
+                
+                <div class="settings-group">
+                    <span class="settings-label">Fill</span>
+                    <div class="color-preview"><input type="color" id="fillColor" value="#10b981"></div>
+                </div>
+                <div class="settings-group">
+                    <span class="settings-label">Stroke</span>
+                    <div class="color-preview"><input type="color" id="strokeColor" value="#ffffff"></div>
+                    <input type="number" class="settings-input" id="strokeWidth" value="2" style="width: 40px;">
+                </div>
+            </div>
+            <div class="canvas-container">
+                <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/></pattern>
+                    </defs>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <div class="panel-header">Objects</div>
+            <div class="panel-content"><div class="layers-list" id="layersList"></div></div>
+            <div class="panel-header">Properties</div>
+            <div class="panel-content" id="propertiesPanel"><div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">Select an object</div></div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-item"><i class="mdi mdi-cursor-default"></i> <span id="toolStatus">Select</span></div>
+        <div class="status-item"><i class="mdi mdi-shape"></i> <span id="objectCount">0 objects</span></div>
+        <div class="status-item"><i class="mdi mdi-crosshairs-gps"></i> <span id="mousePos">0, 0</span></div>
+    </div>
+
+    <div class="context-menu" id="contextMenu">
+        <div class="context-item" data-action="duplicate"><i class="mdi mdi-content-copy"></i> Duplicate</div>
+        <div class="context-item" data-action="delete"><i class="mdi mdi-delete"></i> Delete</div>
+    </div>
+
+    <!-- Scripts (order matters) -->
+    <!-- Core: paths.js must load first as it defines VectorEditor namespace and state -->
+    <script src="js/paths.js"></script>
+    <!-- Toolbar: defines setTool which board.js needs -->
+    <script src="js/toolbar.js"></script>
+    <!-- Board: canvas rendering and interactions -->
+    <script src="js/board.js"></script>
+    
+    <!-- Tool Scripts -->
+    <script src="js/tool-select.js"></script>
+    <script src="js/tool-rotate.js"></script>
+    <script src="js/lines-tool.js"></script>
+    <script src="js/arcs-tool.js"></script>
+    <script src="js/rectangle-tool.js"></script>
+    <script src="js/circle-tool.js"></script>
+    <script src="js/polygon-tool.js"></script>
+    
+    <!-- UI Components -->
+    <script src="js/object-box.js"></script>
+    <script src="js/properties-bar.js"></script>
+    <script src="js/properties-box.js"></script>
+    <script src="js/status-bar.js"></script>
+
+    <!-- Initialization -->
+    <script>
+        // Initialize all components
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('canvas');
+            
+            // Initialize toolbar (attaches click handlers to existing buttons)
+            VectorEditor.initToolbar();
+            
+            // Initialize keyboard shortcuts
+            VectorEditor.initKeyboardShortcuts();
+            
+            // Initialize board (canvas interactions)
+            VectorEditor.initBoard(canvas);
+            
+            // Initialize UI components
+            VectorEditor.initObjectBox();
+            VectorEditor.initPropertiesBar();
+            VectorEditor.initPropertiesBox();
+            VectorEditor.initStatusBar();
+            
+            // Initialize tools
+            Object.values(VectorEditor.tools || {}).forEach(tool => {
+                if (tool.init) tool.init();
+            });
+            
+            // Create demo objects
+            VectorEditor.state.objects.push(VectorEditor.createRectangle(100, 100, 150, 100));
+            VectorEditor.state.objects.push(VectorEditor.createCircle(400, 200, 60));
+            VectorEditor.state.objects.push(VectorEditor.createPolygon(600, 200, 70, 6));
+            
+            // Initial render
+            VectorEditor.render(canvas);
+        });
+    </script>
+</body>
+</html>
