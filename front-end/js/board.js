@@ -49,17 +49,40 @@
 
     function renderObject(canvas, obj, isPreview = false) {
         const { getArcCurveCommand } = VectorEditor;
+        const Modifiers = VectorEditor.Modifiers;
+        
+        // Get display object (with modifiers applied)
+        let displayObj = obj;
+        if (Modifiers && obj.modifiers && obj.modifiers.length > 0) {
+            displayObj = Modifiers.getDisplayObject(obj);
+        }
+        
+        // Handle array modifier copies
+        if (displayObj._arrayCopies && Array.isArray(displayObj._arrayCopies)) {
+            displayObj._arrayCopies.forEach((copy, index) => {
+                renderSingleObject(canvas, copy, isPreview && index === 0);
+            });
+            return;
+        }
+        
+        renderSingleObject(canvas, displayObj, isPreview);
+    }
+    
+    function renderSingleObject(canvas, obj, isPreview = false) {
+        const { getArcCurveCommand } = VectorEditor;
         
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let d = '';
         
-        if (obj.points.length > 0) {
+        if (obj.points && obj.points.length > 0) {
             d = `M ${obj.points[0].x} ${obj.points[0].y} `;
             
-            obj.edges.forEach((edge) => {
-                const p2 = obj.points[edge.points[1]];
-                d += getArcCurveCommand(obj.points[edge.points[0]], p2, edge) + ' ';
-            });
+            if (obj.edges) {
+                obj.edges.forEach((edge) => {
+                    const p2 = obj.points[edge.points[1]];
+                    d += getArcCurveCommand(obj.points[edge.points[0]], p2, edge) + ' ';
+                });
+            }
         }
         
         if (obj.closed) d += 'Z';
@@ -67,8 +90,8 @@
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', d);
         path.setAttribute('fill', obj.fill || 'none');
-        path.setAttribute('stroke', obj.stroke);
-        path.setAttribute('stroke-width', obj.strokeWidth);
+        path.setAttribute('stroke', obj.stroke || '#ffffff');
+        path.setAttribute('stroke-width', obj.strokeWidth || 2);
         if(isPreview) path.setAttribute('opacity', '0.6');
         g.appendChild(path);
         canvas.appendChild(g);

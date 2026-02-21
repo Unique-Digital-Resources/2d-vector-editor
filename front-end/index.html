@@ -83,6 +83,13 @@
             <div class="panel-content"><div class="layers-list" id="layersList"></div></div>
             <div class="panel-header">Properties</div>
             <div class="panel-content" id="propertiesPanel"><div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">Select an object</div></div>
+            <div class="panel-header">Modifiers</div>
+            <div class="panel-content" id="modifiersPanel">
+                <div class="modifiers-empty">
+                    <i class="mdi mdi-puzzle-outline"></i>
+                    <span>Select an object to manage modifiers</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -119,6 +126,11 @@
     <script src="js/properties-bar.js"></script>
     <script src="js/properties-box.js"></script>
     <script src="js/status-bar.js"></script>
+    
+    <!-- Modifier System -->
+    <script src="js/modifiers.js"></script>
+    <script src="js/modifier-bool.js"></script>
+    <script src="js/modifier-array.js"></script>
 
     <!-- Initialization -->
     <script>
@@ -140,6 +152,9 @@
             VectorEditor.initPropertiesBar();
             VectorEditor.initPropertiesBox();
             VectorEditor.initStatusBar();
+            
+            // Initialize modifier system
+            VectorEditor.Modifiers.init();
             
             // Initialize tools
             Object.values(VectorEditor.tools || {}).forEach(tool => {

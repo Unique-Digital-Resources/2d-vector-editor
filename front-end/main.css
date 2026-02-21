@@ -133,3 +133,308 @@ body {
 .switch.active { background: var(--accent); border-color: var(--accent); }
 .switch::after { content: ''; position: absolute; top: 1px; left: 1px; width: 14px; height: 14px; background: var(--text-primary); border-radius: 50%; transition: transform 0.2s; }
 .switch.active::after { transform: translateX(14px); background: white; }
+
+/* ============================================
+   MODIFIER PANEL STYLES
+   ============================================ */
+
+/* Modifiers Empty State */
+.modifiers-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 20px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+    gap: 8px;
+}
+
+.modifiers-empty i {
+    font-size: 32px;
+    opacity: 0.5;
+}
+
+.modifiers-empty-list {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* Modifiers Header */
+.modifiers-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 8px;
+}
+
+.modifiers-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.modifier-add-wrapper {
+    flex: 1;
+    max-width: 140px;
+}
+
+.modifier-dropdown {
+    width: 100%;
+    height: 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+}
+
+.modifier-dropdown:focus {
+    border-color: var(--accent);
+}
+
+.modifier-dropdown option {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+}
+
+/* Modifiers List */
+.modifiers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Modifier Card */
+.modifier-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.modifier-card:hover {
+    border-color: var(--bg-hover);
+}
+
+.modifier-card.disabled {
+    opacity: 0.5;
+}
+
+.modifier-card.dragging {
+    opacity: 0.8;
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: var(--accent);
+}
+
+/* Modifier Card Header */
+.modifier-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.modifier-card:not(.collapsed) .modifier-card-header {
+    border-bottom-color: var(--border);
+}
+
+.modifier-drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+}
+
+.modifier-drag-handle:hover {
+    color: var(--text-secondary);
+}
+
+.modifier-drag-handle:active {
+    cursor: grabbing;
+}
+
+.modifier-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-dim);
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 14px;
+}
+
+.modifier-card.disabled .modifier-icon {
+    background: var(--bg-hover);
+    color: var(--text-muted);
+}
+
+.modifier-name {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.modifier-actions {
+    display: flex;
+    gap: 2px;
+}
+
+.modifier-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 16px;
+}
+
+.modifier-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.modifier-btn.toggle-enabled.active {
+    color: var(--accent);
+}
+
+.modifier-btn.delete-modifier:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+}
+
+/* Modifier Card Content */
+.modifier-card-content {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modifier-card.collapsed .modifier-card-content {
+    display: none;
+}
+
+/* Modifier Parameters */
+.modifier-param-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.modifier-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.modifier-input {
+    width: 100%;
+    height: 28px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+    outline: none;
+}
+
+.modifier-input:focus {
+    border-color: var(--accent);
+}
+
+.modifier-select {
+    width: 100%;
+    height: 28px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+}
+
+.modifier-select:focus {
+    border-color: var(--accent);
+}
+
+.modifier-select option {
+    background: var(--bg-panel);
+}
+
+/* Modifier Checkbox */
+.modifier-checkbox-group {
+    flex-direction: row !important;
+}
+
+.modifier-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.modifier-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* Modifier Info */
+.modifier-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.modifier-info i {
+    color: var(--accent);
+    font-size: 14px;
+}
+
+/* Drag and Drop Placeholder */
+.modifier-card.drag-over {
+    border-style: dashed;
+    border-color: var(--accent);
+}
