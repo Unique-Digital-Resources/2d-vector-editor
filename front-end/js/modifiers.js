@@ -284,9 +284,8 @@
         return `
             <div class="modifier-card ${enabledClass} ${collapsedClass}" 
                  data-modifier-id="${modifier.id}" 
-                 data-modifier-index="${index}"
-                 draggable="true">
-                <div class="modifier-card-header">
+                 data-modifier-index="${index}">
+                <div class="modifier-card-header" draggable="true">
                     <div class="modifier-drag-handle" title="Drag to reorder">
                         <i class="mdi mdi-drag-vertical"></i>
                     </div>
@@ -351,12 +350,18 @@
                     e.stopPropagation();
                     removeModifier(objectId, modifierId);
                 });
-                
-                // Drag and drop for reordering
-                card.addEventListener('dragstart', handleDragStart);
+            });
+            
+            // Drag and drop for reordering - attach to headers only
+            list.querySelectorAll('.modifier-card-header').forEach(header => {
+                header.addEventListener('dragstart', handleDragStart);
+                header.addEventListener('dragend', handleDragEnd);
+            });
+            
+            // Allow dropping on cards
+            list.querySelectorAll('.modifier-card').forEach(card => {
                 card.addEventListener('dragover', handleDragOver);
                 card.addEventListener('drop', handleDrop);
-                card.addEventListener('dragend', handleDragEnd);
             });
         }
     }
@@ -368,26 +373,30 @@
     let draggedModifier = null;
     
     function handleDragStart(e) {
-        draggedModifier = this;
-        this.classList.add('dragging');
+        // Get the parent card element
+        draggedModifier = this.closest('.modifier-card');
+        draggedModifier.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', this.dataset.modifierId);
+        e.dataTransfer.setData('text/plain', draggedModifier.dataset.modifierId);
     }
     
     function handleDragOver(e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         
-        if (this !== draggedModifier) {
+        const draggedCard = draggedModifier;
+        const targetCard = this.classList.contains('modifier-card') ? this : this.closest('.modifier-card');
+        
+        if (targetCard && draggedCard && targetCard !== draggedCard) {
             const list = document.getElementById('modifiersList');
             const cards = [...list.querySelectorAll('.modifier-card')];
-            const draggedIndex = cards.indexOf(draggedModifier);
-            const targetIndex = cards.indexOf(this);
+            const draggedIndex = cards.indexOf(draggedCard);
+            const targetIndex = cards.indexOf(targetCard);
             
             if (draggedIndex < targetIndex) {
-                this.parentNode.insertBefore(draggedModifier, this.nextSibling);
+                targetCard.parentNode.insertBefore(draggedCard, targetCard.nextSibling);
             } else {
-                this.parentNode.insertBefore(draggedModifier, this);
+                targetCard.parentNode.insertBefore(draggedCard, targetCard);
             }
         }
     }
@@ -395,21 +404,27 @@
     function handleDrop(e) {
         e.preventDefault();
         
-        if (this !== draggedModifier && draggedModifier) {
+        const draggedCard = draggedModifier;
+        const targetCard = this.classList.contains('modifier-card') ? this : this.closest('.modifier-card');
+        
+        if (targetCard && draggedCard && targetCard !== draggedCard) {
             const list = document.getElementById('modifiersList');
             const cards = [...list.querySelectorAll('.modifier-card')];
-            const newIndex = cards.indexOf(this);
+            const newIndex = cards.indexOf(targetCard);
             
             reorderModifier(
                 state.selectedObjectId,
-                draggedModifier.dataset.modifierId,
+                draggedCard.dataset.modifierId,
                 newIndex
             );
         }
     }
     
     function handleDragEnd() {
-        this.classList.remove('dragging');
+        const draggedCard = draggedModifier;
+        if (draggedCard) {
+            draggedCard.classList.remove('dragging');
+        }
         draggedModifier = null;
     }
     

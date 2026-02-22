@@ -87,17 +87,22 @@
      */
     function generateLinearArray(obj, params) {
         const results = [];
-        const { count, offsetX, offsetY, relativeOffset, useRelativeOffset } = params;
+        const { count, offsetX, offsetY, relativeOffsetX, relativeOffsetY, useRelativeOffset } = params;
+        
+        // Get bounding box for relative calculations
+        const bbox = VectorEditor.getBoundingBox(obj.points);
         
         // Calculate offset
-        let dx = offsetX;
-        let dy = offsetY;
+        let dx, dy;
         
-        if (useRelativeOffset && relativeOffset > 0) {
-            // Use bounding box size for relative offset
-            const bbox = VectorEditor.getBoundingBox(obj.points);
-            dx = bbox.width * relativeOffset;
-            dy = bbox.height * relativeOffset;
+        if (useRelativeOffset) {
+            // Use relative offset as multiplier of object's bounding box dimensions
+            dx = bbox.width * (relativeOffsetX || 0);
+            dy = bbox.height * (relativeOffsetY || 0);
+        } else {
+            // Use absolute offset values
+            dx = offsetX || 0;
+            dy = offsetY || 0;
         }
         
         for (let i = 0; i < count; i++) {
@@ -152,16 +157,22 @@
      */
     function generateGridArray(obj, params) {
         const results = [];
-        const { countX, countY, offsetX, offsetY, relativeOffset, useRelativeOffset } = params;
+        const { countX, countY, offsetX, offsetY, relativeOffsetX, relativeOffsetY, useRelativeOffset } = params;
+        
+        // Get bounding box for relative calculations
+        const bbox = VectorEditor.getBoundingBox(obj.points);
         
         // Calculate offsets
-        let dx = offsetX;
-        let dy = offsetY;
+        let dx, dy;
         
-        if (useRelativeOffset && relativeOffset > 0) {
-            const bbox = VectorEditor.getBoundingBox(obj.points);
-            dx = bbox.width * relativeOffset;
-            dy = bbox.height * relativeOffset;
+        if (useRelativeOffset) {
+            // Use relative offset as multiplier of object's bounding box dimensions
+            dx = bbox.width * (relativeOffsetX || 0);
+            dy = bbox.height * (relativeOffsetY || 0);
+        } else {
+            // Use absolute offset values
+            dx = offsetX || 0;
+            dy = offsetY || 0;
         }
         
         for (let row = 0; row < countY; row++) {
@@ -201,7 +212,8 @@
             offsetX: 50,
             offsetY: 0,
             useRelativeOffset: true,
-            relativeOffset: 1.2,
+            relativeOffsetX: 1.2,
+            relativeOffsetY: 0,
             
             // Radial settings
             angle: 360,
@@ -307,18 +319,6 @@
                                data-param="count" data-modifier-id="${modifier.id}"
                                value="${params.count}" min="1" max="100">
                     </div>
-                    <div class="modifier-param-group">
-                        <label class="modifier-label">Offset X</label>
-                        <input type="number" class="modifier-input" 
-                               data-param="offsetX" data-modifier-id="${modifier.id}"
-                               value="${params.offsetX}" step="1">
-                    </div>
-                    <div class="modifier-param-group">
-                        <label class="modifier-label">Offset Y</label>
-                        <input type="number" class="modifier-input" 
-                               data-param="offsetY" data-modifier-id="${modifier.id}"
-                               value="${params.offsetY}" step="1">
-                    </div>
                     <div class="modifier-param-group modifier-checkbox-group">
                         <label class="modifier-checkbox-label">
                             <input type="checkbox" class="modifier-checkbox" 
@@ -330,12 +330,31 @@
                     </div>
                     ${params.useRelativeOffset ? `
                         <div class="modifier-param-group">
-                            <label class="modifier-label">Relative Size</label>
+                            <label class="modifier-label">Relative X</label>
                             <input type="number" class="modifier-input" 
-                                   data-param="relativeOffset" data-modifier-id="${modifier.id}"
-                                   value="${params.relativeOffset}" min="0" max="10" step="0.1">
+                                   data-param="relativeOffsetX" data-modifier-id="${modifier.id}"
+                                   value="${params.relativeOffsetX}" min="-10" max="10" step="0.1">
                         </div>
-                    ` : ''}
+                        <div class="modifier-param-group">
+                            <label class="modifier-label">Relative Y</label>
+                            <input type="number" class="modifier-input" 
+                                   data-param="relativeOffsetY" data-modifier-id="${modifier.id}"
+                                   value="${params.relativeOffsetY}" min="-10" max="10" step="0.1">
+                        </div>
+                    ` : `
+                        <div class="modifier-param-group">
+                            <label class="modifier-label">Offset X</label>
+                            <input type="number" class="modifier-input" 
+                                   data-param="offsetX" data-modifier-id="${modifier.id}"
+                                   value="${params.offsetX}" step="1">
+                        </div>
+                        <div class="modifier-param-group">
+                            <label class="modifier-label">Offset Y</label>
+                            <input type="number" class="modifier-input" 
+                                   data-param="offsetY" data-modifier-id="${modifier.id}"
+                                   value="${params.offsetY}" step="1">
+                        </div>
+                    `}
                 `;
                 break;
                 
@@ -393,18 +412,6 @@
                                data-param="countY" data-modifier-id="${modifier.id}"
                                value="${params.countY}" min="1" max="50">
                     </div>
-                    <div class="modifier-param-group">
-                        <label class="modifier-label">Offset X</label>
-                        <input type="number" class="modifier-input" 
-                               data-param="offsetX" data-modifier-id="${modifier.id}"
-                               value="${params.offsetX}" step="1">
-                    </div>
-                    <div class="modifier-param-group">
-                        <label class="modifier-label">Offset Y</label>
-                        <input type="number" class="modifier-input" 
-                               data-param="offsetY" data-modifier-id="${modifier.id}"
-                               value="${params.offsetY}" step="1">
-                    </div>
                     <div class="modifier-param-group modifier-checkbox-group">
                         <label class="modifier-checkbox-label">
                             <input type="checkbox" class="modifier-checkbox" 
@@ -416,12 +423,31 @@
                     </div>
                     ${params.useRelativeOffset ? `
                         <div class="modifier-param-group">
-                            <label class="modifier-label">Relative Size</label>
+                            <label class="modifier-label">Relative X</label>
                             <input type="number" class="modifier-input" 
-                                   data-param="relativeOffset" data-modifier-id="${modifier.id}"
-                                   value="${params.relativeOffset}" min="0" max="10" step="0.1">
+                                   data-param="relativeOffsetX" data-modifier-id="${modifier.id}"
+                                   value="${params.relativeOffsetX}" min="-10" max="10" step="0.1">
                         </div>
-                    ` : ''}
+                        <div class="modifier-param-group">
+                            <label class="modifier-label">Relative Y</label>
+                            <input type="number" class="modifier-input" 
+                                   data-param="relativeOffsetY" data-modifier-id="${modifier.id}"
+                                   value="${params.relativeOffsetY}" min="-10" max="10" step="0.1">
+                        </div>
+                    ` : `
+                        <div class="modifier-param-group">
+                            <label class="modifier-label">Offset X</label>
+                            <input type="number" class="modifier-input" 
+                                   data-param="offsetX" data-modifier-id="${modifier.id}"
+                                   value="${params.offsetX}" step="1">
+                        </div>
+                        <div class="modifier-param-group">
+                            <label class="modifier-label">Offset Y</label>
+                            <input type="number" class="modifier-input" 
+                                   data-param="offsetY" data-modifier-id="${modifier.id}"
+                                   value="${params.offsetY}" step="1">
+                        </div>
+                    `}
                 `;
                 break;
         }

@@ -79,15 +79,26 @@
 
         <!-- Right Panel -->
         <div class="right-panel">
-            <div class="panel-header">Objects</div>
-            <div class="panel-content"><div class="layers-list" id="layersList"></div></div>
-            <div class="panel-header">Properties</div>
-            <div class="panel-content" id="propertiesPanel"><div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">Select an object</div></div>
-            <div class="panel-header">Modifiers</div>
-            <div class="panel-content" id="modifiersPanel">
-                <div class="modifiers-empty">
-                    <i class="mdi mdi-puzzle-outline"></i>
-                    <span>Select an object to manage modifiers</span>
+            <div class="panel-header collapsible" data-target="objectsContent">
+                <span class="panel-header-text">Objects</span>
+                <i class="mdi mdi-chevron-down panel-collapse-icon"></i>
+            </div>
+            <div class="panel-content" id="objectsContent"><div class="layers-list" id="layersList"></div></div>
+            <div class="panel-header collapsible" data-target="propertiesContent">
+                <span class="panel-header-text">Properties</span>
+                <i class="mdi mdi-chevron-down panel-collapse-icon"></i>
+            </div>
+            <div class="panel-content" id="propertiesContent"><div id="propertiesPanel" style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">Select an object</div></div>
+            <div class="panel-header collapsible" data-target="modifiersContent">
+                <span class="panel-header-text">Modifiers</span>
+                <i class="mdi mdi-chevron-down panel-collapse-icon"></i>
+            </div>
+            <div class="panel-content" id="modifiersContent">
+                <div id="modifiersPanel">
+                    <div class="modifiers-empty">
+                        <i class="mdi mdi-puzzle-outline"></i>
+                        <span>Select an object to manage modifiers</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -159,6 +170,19 @@
             // Initialize tools
             Object.values(VectorEditor.tools || {}).forEach(tool => {
                 if (tool.init) tool.init();
+            });
+            
+            // Initialize collapsible panel sections
+            document.querySelectorAll('.panel-header.collapsible').forEach(header => {
+                header.addEventListener('click', () => {
+                    const targetId = header.dataset.target;
+                    const content = targetId ? document.getElementById(targetId) : header.nextElementSibling;
+                    
+                    if (content) {
+                        header.classList.toggle('collapsed');
+                        content.classList.toggle('collapsed');
+                    }
+                });
             });
             
             // Create demo objects
