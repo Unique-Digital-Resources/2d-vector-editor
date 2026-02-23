@@ -154,10 +154,6 @@
                            value="${params.offsetY}" step="1">
                 </div>
             `}
-            <div class="modifier-info">
-                <i class="mdi mdi-information-outline"></i>
-                <span>Copies in a grid</span>
-            </div>
         `;
     }
     

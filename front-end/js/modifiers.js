@@ -361,6 +361,7 @@
             // Allow dropping on cards
             list.querySelectorAll('.modifier-card').forEach(card => {
                 card.addEventListener('dragover', handleDragOver);
+                card.addEventListener('dragleave', handleDragLeave);
                 card.addEventListener('drop', handleDrop);
             });
         }
@@ -371,6 +372,7 @@
     // ============================================
     
     let draggedModifier = null;
+    let draggedOriginalIndex = null;
     
     function handleDragStart(e) {
         // Get the parent card element
@@ -378,6 +380,9 @@
         draggedModifier.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', draggedModifier.dataset.modifierId);
+        
+        // Store the original index from the data attribute
+        draggedOriginalIndex = parseInt(draggedModifier.dataset.modifierIndex, 10);
     }
     
     function handleDragOver(e) {
@@ -388,16 +393,23 @@
         const targetCard = this.classList.contains('modifier-card') ? this : this.closest('.modifier-card');
         
         if (targetCard && draggedCard && targetCard !== draggedCard) {
-            const list = document.getElementById('modifiersList');
-            const cards = [...list.querySelectorAll('.modifier-card')];
-            const draggedIndex = cards.indexOf(draggedCard);
-            const targetIndex = cards.indexOf(targetCard);
+            // Add visual indicator class
+            targetCard.classList.add('drag-over');
             
-            if (draggedIndex < targetIndex) {
-                targetCard.parentNode.insertBefore(draggedCard, targetCard.nextSibling);
-            } else {
-                targetCard.parentNode.insertBefore(draggedCard, targetCard);
-            }
+            // Remove drag-over from other cards
+            document.querySelectorAll('.modifier-card.drag-over').forEach(card => {
+                if (card !== targetCard) {
+                    card.classList.remove('drag-over');
+                }
+            });
+        }
+    }
+    
+    function handleDragLeave(e) {
+        // Remove drag-over class when leaving a card
+        const targetCard = this.classList.contains('modifier-card') ? this : this.closest('.modifier-card');
+        if (targetCard) {
+            targetCard.classList.remove('drag-over');
         }
     }
     
@@ -408,9 +420,19 @@
         const targetCard = this.classList.contains('modifier-card') ? this : this.closest('.modifier-card');
         
         if (targetCard && draggedCard && targetCard !== draggedCard) {
-            const list = document.getElementById('modifiersList');
-            const cards = [...list.querySelectorAll('.modifier-card')];
-            const newIndex = cards.indexOf(targetCard);
+            // Get the target index from the data attribute
+            const targetIndex = parseInt(targetCard.dataset.modifierIndex, 10);
+            
+            // Calculate the new index based on original positions
+            let newIndex = targetIndex;
+            
+            // If moving down, adjust index
+            if (draggedOriginalIndex < targetIndex) {
+                newIndex = targetIndex;
+            } else {
+                // If moving up, use target index
+                newIndex = targetIndex;
+            }
             
             reorderModifier(
                 state.selectedObjectId,
@@ -418,6 +440,11 @@
                 newIndex
             );
         }
+        
+        // Clean up visual indicators
+        document.querySelectorAll('.modifier-card.drag-over').forEach(card => {
+            card.classList.remove('drag-over');
+        });
     }
     
     function handleDragEnd() {
@@ -425,7 +452,14 @@
         if (draggedCard) {
             draggedCard.classList.remove('dragging');
         }
+        
+        // Clean up all visual indicators
+        document.querySelectorAll('.modifier-card.drag-over').forEach(card => {
+            card.classList.remove('drag-over');
+        });
+        
         draggedModifier = null;
+        draggedOriginalIndex = null;
     }
     
     // ============================================

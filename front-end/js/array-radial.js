@@ -151,10 +151,6 @@
                            value="${params.centerY}">
                 </div>
             ` : ''}
-            <div class="modifier-info">
-                <i class="mdi mdi-information-outline"></i>
-                <span>Copies in a circle</span>
-            </div>
         `;
     }
     
