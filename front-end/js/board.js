@@ -34,7 +34,7 @@
             }
         }
         
-        if (['polyline', 'arc'].includes(state.tool)) {
+        if (['polyline', 'arc', 'spline'].includes(state.tool)) {
             renderDrawingPreview(canvas);
         }
         
@@ -45,6 +45,12 @@
 
         // Trigger UI update event
         window.dispatchEvent(new CustomEvent('vectorEditorUpdate'));
+    }
+
+    function getBezierCurveCommand(p1, p2, handle1, handle2) {
+        const cp1 = handle1 || p1;
+        const cp2 = handle2 || p2;
+        return `C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${p2.x} ${p2.y}`;
     }
 
     function renderObject(canvas, obj, isPreview = false) {
@@ -78,9 +84,17 @@
             d = `M ${obj.points[0].x} ${obj.points[0].y} `;
             
             if (obj.edges) {
-                obj.edges.forEach((edge) => {
+                obj.edges.forEach((edge, i) => {
                     const p2 = obj.points[edge.points[1]];
-                    d += getArcCurveCommand(obj.points[edge.points[0]], p2, edge) + ' ';
+                    if (edge.type === 'bezier' && obj.handles) {
+                        const p1Idx = edge.points[0];
+                        const p2Idx = edge.points[1];
+                        const h1 = obj.handles[p1Idx] ? obj.handles[p1Idx].out : null;
+                        const h2 = obj.handles[p2Idx] ? obj.handles[p2Idx].in : null;
+                        d += getBezierCurveCommand(obj.points[p1Idx], p2, h1, h2) + ' ';
+                    } else {
+                        d += getArcCurveCommand(obj.points[edge.points[0]], p2, edge) + ' ';
+                    }
                 });
             }
         }
@@ -113,17 +127,36 @@
 
             let d = `M ${pts[0].x} ${pts[0].y} `;
             
-            // Render existing edges
+            // Render existing edges according to their own type
             if (state.drawingEdges) {
                 state.drawingEdges.forEach((edge) => {
                     const p2 = pts[edge.points[1]];
-                    d += getArcCurveCommand(pts[edge.points[0]], p2, edge) + ' ';
+                    if (edge.type === 'bezier' && state.drawingHandles) {
+                        const p1Idx = edge.points[0];
+                        const p2Idx = edge.points[1];
+                        const h1 = state.drawingHandles[p1Idx] ? state.drawingHandles[p1Idx].out : null;
+                        const h2 = state.drawingHandles[p2Idx] ? state.drawingHandles[p2Idx].in : null;
+                        d += getBezierCurveCommand(pts[p1Idx], p2, h1, h2) + ' ';
+                    } else if (edge.type === 'arc') {
+                        d += getArcCurveCommand(pts[edge.points[0]], p2, edge) + ' ';
+                    } else {
+                        d += `L ${p2.x} ${p2.y} `;
+                    }
                 });
             }
             
-            // Render rubber band
-            const lastPt = pts[pts.length - 1];
-            if (state.tool === 'arc') {
+            // Render rubber band to mouse based on current tool
+            const lastIdx = pts.length - 1;
+            const lastPt = pts[lastIdx];
+            
+            if (state.tool === 'spline') {
+                const lastHandle = state.drawingHandles ? state.drawingHandles[lastIdx] : null;
+                if (lastHandle && lastHandle.out) {
+                    d += getBezierCurveCommand(lastPt, mouse, lastHandle.out, mouse) + ' ';
+                } else {
+                    d += `L ${mouse.x} ${mouse.y}`;
+                }
+            } else if (state.tool === 'arc') {
                 const params = getArcParamsFromAngle(lastPt, mouse, state.arcAngle, state.arcSweep);
                 d += getArcCurveCommand(lastPt, mouse, params);
             } else {
@@ -136,6 +169,68 @@
             path.setAttribute('stroke-dasharray', '5,5');
             lineGroup.appendChild(path);
             canvas.appendChild(lineGroup);
+            
+            // Render control lines and handles for any bezier edges
+            if (state.drawingHandles) {
+                state.drawingHandles.forEach((handle, i) => {
+                    if (!handle) return;
+                    const pt = pts[i];
+                    
+                    // Only render handles for points that are part of bezier edges
+                    const isPartOfBezier = state.drawingEdges.some(e => 
+                        e.type === 'bezier' && (e.points[0] === i || e.points[1] === i)
+                    );
+                    const isLastPoint = i === lastIdx;
+                    
+                    if (!isPartOfBezier && !isLastPoint) return;
+                    
+                    // Control lines
+                    if (handle.in && isPartOfBezier) {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', pt.x);
+                        line.setAttribute('y1', pt.y);
+                        line.setAttribute('x2', handle.in.x);
+                        line.setAttribute('y2', handle.in.y);
+                        line.setAttribute('stroke', '#f59e0b');
+                        line.setAttribute('stroke-width', '1');
+                        line.setAttribute('stroke-dasharray', '3,3');
+                        canvas.appendChild(line);
+                    }
+                    if (handle.out && (isPartOfBezier || (isLastPoint && state.tool === 'spline'))) {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', pt.x);
+                        line.setAttribute('y1', pt.y);
+                        line.setAttribute('x2', handle.out.x);
+                        line.setAttribute('y2', handle.out.y);
+                        line.setAttribute('stroke', '#f59e0b');
+                        line.setAttribute('stroke-width', '1');
+                        line.setAttribute('stroke-dasharray', '3,3');
+                        canvas.appendChild(line);
+                    }
+                    
+                    // Control handle circles
+                    if (handle.in && isPartOfBezier) {
+                        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        c.setAttribute('cx', handle.in.x);
+                        c.setAttribute('cy', handle.in.y);
+                        c.setAttribute('r', 4);
+                        c.setAttribute('fill', '#18181b');
+                        c.setAttribute('stroke', '#f59e0b');
+                        c.setAttribute('stroke-width', '2');
+                        canvas.appendChild(c);
+                    }
+                    if (handle.out && (isPartOfBezier || (isLastPoint && state.tool === 'spline'))) {
+                        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        c.setAttribute('cx', handle.out.x);
+                        c.setAttribute('cy', handle.out.y);
+                        c.setAttribute('r', 4);
+                        c.setAttribute('fill', '#18181b');
+                        c.setAttribute('stroke', '#f59e0b');
+                        c.setAttribute('stroke-width', '2');
+                        canvas.appendChild(c);
+                    }
+                });
+            }
         }
 
         // Render points
@@ -150,9 +245,11 @@
                 let canClose = false;
                 if (pts.length > 2) canClose = true;
                 else if (pts.length === 2) {
-                     const hasExistingArc = state.drawingEdges.some(e => e.type === 'arc');
+                     const hasExistingArc = state.drawingEdges && state.drawingEdges.some(e => e.type === 'arc');
+                     const hasExistingBezier = state.drawingEdges && state.drawingEdges.some(e => e.type === 'bezier');
                      const isCurrentArc = state.tool === 'arc';
-                     if (hasExistingArc || isCurrentArc) canClose = true;
+                     const isSpline = state.tool === 'spline';
+                     if (hasExistingArc || hasExistingBezier || isCurrentArc || isSpline) canClose = true;
                 }
 
                 if (canClose && dist(mouse, p) < 15) {
@@ -163,7 +260,7 @@
     }
 
     function renderSelection(canvas, obj) {
-        const { state, getArcCurveCommand, isEdgeSelected, isPointSelected, isObjectSelected } = VectorEditor;
+        const { state, getArcCurveCommand, isEdgeSelected, isPointSelected, isObjectSelected, isHandleSelected } = VectorEditor;
         
         const objIsSelected = isObjectSelected(obj.id);
         
@@ -172,7 +269,22 @@
             const p2 = obj.points[edge.points[1]];
             const edgeIsSelected = isEdgeSelected(obj.id, i);
             
-            if (edge.type === 'arc') {
+            if (edge.type === 'bezier' && obj.handles) {
+                const h1 = obj.handles[edge.points[0]] ? obj.handles[edge.points[0]].out : null;
+                const h2 = obj.handles[edge.points[1]] ? obj.handles[edge.points[1]].in : null;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = `M ${p1.x} ${p1.y} ` + getBezierCurveCommand(p1, p2, h1, h2);
+                path.setAttribute('d', d);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', edgeIsSelected ? '#f59e0b' : (objIsSelected ? '#10b981' : '#3b82f6'));
+                path.setAttribute('stroke-width', edgeIsSelected ? 6 : 4);
+                path.setAttribute('stroke-linecap', 'round');
+                path.setAttribute('opacity', '0.5');
+                path.setAttribute('data-edge-index', i);
+                path.setAttribute('data-object-id', obj.id);
+                path.style.cursor = 'move';
+                canvas.appendChild(path);
+            } else if (edge.type === 'arc') {
                 const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                 path.setAttribute('d', `M ${p1.x} ${p1.y} ` + getArcCurveCommand(p1, p2, edge));
                 path.setAttribute('fill', 'none');
@@ -211,6 +323,76 @@
             c.style.cursor = 'move';
             canvas.appendChild(c);
         });
+        
+        // Render bezier handles if object has them
+        if (obj.handles) {
+            obj.handles.forEach((handle, i) => {
+                if (!handle) return;
+                const pt = obj.points[i];
+                
+                // Control lines
+                if (handle.in) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', pt.x);
+                    line.setAttribute('y1', pt.y);
+                    line.setAttribute('x2', handle.in.x);
+                    line.setAttribute('y2', handle.in.y);
+                    line.setAttribute('stroke', '#f59e0b');
+                    line.setAttribute('stroke-width', '1');
+                    line.setAttribute('stroke-dasharray', '3,3');
+                    line.setAttribute('data-handle-line', 'in');
+                    line.setAttribute('data-point-index', i);
+                    line.setAttribute('data-object-id', obj.id);
+                    canvas.appendChild(line);
+                }
+                if (handle.out) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', pt.x);
+                    line.setAttribute('y1', pt.y);
+                    line.setAttribute('x2', handle.out.x);
+                    line.setAttribute('y2', handle.out.y);
+                    line.setAttribute('stroke', '#f59e0b');
+                    line.setAttribute('stroke-width', '1');
+                    line.setAttribute('stroke-dasharray', '3,3');
+                    line.setAttribute('data-handle-line', 'out');
+                    line.setAttribute('data-point-index', i);
+                    line.setAttribute('data-object-id', obj.id);
+                    canvas.appendChild(line);
+                }
+                
+                // Control handle circles
+                if (handle.in) {
+                    const handleSelected = isHandleSelected(obj.id, i, 'in');
+                    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    c.setAttribute('cx', handle.in.x);
+                    c.setAttribute('cy', handle.in.y);
+                    c.setAttribute('r', 4);
+                    c.setAttribute('fill', handleSelected ? '#f59e0b' : '#18181b');
+                    c.setAttribute('stroke', '#f59e0b');
+                    c.setAttribute('stroke-width', '2');
+                    c.setAttribute('data-handle-type', 'in');
+                    c.setAttribute('data-point-index', i);
+                    c.setAttribute('data-object-id', obj.id);
+                    c.style.cursor = 'move';
+                    canvas.appendChild(c);
+                }
+                if (handle.out) {
+                    const handleSelected = isHandleSelected(obj.id, i, 'out');
+                    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    c.setAttribute('cx', handle.out.x);
+                    c.setAttribute('cy', handle.out.y);
+                    c.setAttribute('r', 4);
+                    c.setAttribute('fill', handleSelected ? '#f59e0b' : '#18181b');
+                    c.setAttribute('stroke', '#f59e0b');
+                    c.setAttribute('stroke-width', '2');
+                    c.setAttribute('data-handle-type', 'out');
+                    c.setAttribute('data-point-index', i);
+                    c.setAttribute('data-object-id', obj.id);
+                    c.style.cursor = 'move';
+                    canvas.appendChild(c);
+                }
+            });
+        }
     }
     
     function renderSelectionBox(canvas, box) {
@@ -309,6 +491,7 @@
         if (!state.drawingPoints || state.drawingPoints.length < 2) {
             state.drawingPoints = null;
             state.drawingEdges = null;
+            state.drawingHandles = null;
             render(canvas);
             return;
         }
@@ -321,7 +504,7 @@
             const lastIdx = pts.length - 1;
             const edgeDef = {
                 points: [lastIdx, 0],
-                type: state.tool === 'arc' ? 'arc' : 'line'
+                type: state.tool === 'arc' ? 'arc' : (state.tool === 'spline' ? 'bezier' : 'line')
             };
             if (state.tool === 'arc') {
                  const params = getArcParamsFromAngle(pts[lastIdx], pts[0], state.arcAngle, state.arcSweep);
@@ -341,11 +524,18 @@
             stroke: state.strokeColor,
             strokeWidth: state.strokeWidth
         };
+        
+        // Save handles if any bezier edges exist
+        const hasBezierEdges = edges.some(e => e.type === 'bezier');
+        if (hasBezierEdges && state.drawingHandles) {
+            obj.handles = JSON.parse(JSON.stringify(state.drawingHandles));
+        }
 
         state.objects.push(obj);
         selectObject(obj.id, false);
         state.drawingPoints = null;
         state.drawingEdges = null;
+        state.drawingHandles = null;
         render(canvas);
     }
 
@@ -379,10 +569,11 @@
             const isShiftClick = e.shiftKey;
 
             // --- Drawing Tools Logic ---
-            if (['polyline', 'arc'].includes(state.tool)) {
+            if (['polyline', 'arc', 'spline'].includes(state.tool)) {
                 if (!state.drawingPoints) {
                     state.drawingPoints = [];
                     state.drawingEdges = [];
+                    state.drawingHandles = [];
                 }
                 
                 const pts = state.drawingPoints;
@@ -396,8 +587,9 @@
                     if (pts.length === 2) {
                         const existingIsArc = state.drawingEdges.length > 0 && state.drawingEdges[0].type === 'arc';
                         const currentIsArc = state.tool === 'arc';
+                        const isSpline = state.tool === 'spline';
                         
-                        if (existingIsArc || currentIsArc) canClose = true;
+                        if (existingIsArc || currentIsArc || isSpline) canClose = true;
                     }
 
                     if (canClose) {
@@ -412,7 +604,7 @@
                     const lastIdx = pts.length - 1;
                     const edgeDef = {
                         points: [lastIdx, lastIdx + 1],
-                        type: state.tool === 'arc' ? 'arc' : 'line'
+                        type: state.tool === 'arc' ? 'arc' : (state.tool === 'spline' ? 'bezier' : 'line')
                     };
                     if (state.tool === 'arc') {
                         const params = getArcParamsFromAngle(pts[lastIdx], newPt, state.arcAngle, state.arcSweep);
@@ -422,6 +614,19 @@
                 }
 
                 state.drawingPoints.push(newPt);
+                
+                // Ensure handles array has entry for each point
+                while (state.drawingHandles.length < state.drawingPoints.length) {
+                    state.drawingHandles.push({ in: null, out: null });
+                }
+                
+                // If spline tool, start dragging the out handle
+                if (state.tool === 'spline') {
+                    state.isDrawingSpline = true;
+                    state.isDraggingHandle = true;
+                    state.draggingHandleType = 'out';
+                }
+                
                 render(canvas);
                 return;
             }
@@ -437,6 +642,7 @@
                     state.initialBbox = bbox;
                     state.initialPoints[selObj.id] = JSON.parse(JSON.stringify(selObj.points));
                     state.initialEdges[selObj.id] = JSON.parse(JSON.stringify(selObj.edges));
+                    if (selObj.handles) state.initialHandles[selObj.id] = JSON.parse(JSON.stringify(selObj.handles));
                     return;
                 }
             }
@@ -448,9 +654,35 @@
                     state.interaction = 'rotate';
                     state.initialPoints[selObj.id] = JSON.parse(JSON.stringify(selObj.points));
                     state.initialEdges[selObj.id] = JSON.parse(JSON.stringify(selObj.edges));
+                    if (selObj.handles) state.initialHandles[selObj.id] = JSON.parse(JSON.stringify(selObj.handles));
                     state.rotationCenter = { x: bbox.x + bbox.width/2, y: bbox.y + bbox.height/2 };
                     return;
                 }
+            }
+
+            // --- Bezier handle hit testing ---
+            let handleHit = null;
+            for (const objId of state.selectedObjectIds) {
+                const obj = state.objects.find(o => o.id === objId);
+                if (obj && obj.handles) {
+                    for (let ptIdx = 0; ptIdx < obj.handles.length; ptIdx++) {
+                        const handleType = VectorEditor.hitTestBezierHandle(pos, obj, ptIdx);
+                        if (handleType) {
+                            handleHit = { obj, ptIdx, handleType };
+                            break;
+                        }
+                    }
+                    if (handleHit) break;
+                }
+            }
+            
+            if (handleHit) {
+                const { obj, ptIdx, handleType } = handleHit;
+                state.interaction = 'bezier-handle';
+                state.initialHandles[obj.id] = JSON.parse(JSON.stringify(obj.handles));
+                VectorEditor.selectHandle(obj.id, ptIdx, handleType, isCtrlClick);
+                render(canvas);
+                return;
             }
 
             // --- Point hit testing with multi-selection ---
@@ -472,16 +704,18 @@
                 if (isCtrlClick) {
                     togglePointSelection(obj.id, ptIdx);
                 } else if (isShiftClick && state.selectedPointIndex !== null && state.selectedObjectId === obj.id) {
-                    // Range selection for points
                     selectPointRange(obj.id, state.selectedPointIndex, ptIdx);
                 } else {
                     selectPoint(obj.id, ptIdx, isShiftClick);
                 }
                 state.interaction = 'point';
-                // Store initial points for all selected objects
                 state.selectedObjectIds.forEach(objId => {
                     const o = state.objects.find(ob => ob.id === objId);
-                    if (o) state.initialPoints[objId] = JSON.parse(JSON.stringify(o.points));
+                    if (o) {
+                        state.initialPoints[objId] = JSON.parse(JSON.stringify(o.points));
+                        state.initialEdges[objId] = JSON.parse(JSON.stringify(o.edges));
+                        if (o.handles) state.initialHandles[objId] = JSON.parse(JSON.stringify(o.handles));
+                    }
                 });
                 render(canvas);
                 return;
@@ -518,10 +752,13 @@
                     state.initialEdges[obj.id] = JSON.parse(JSON.stringify(obj.edges));
                 } else {
                     state.interaction = 'edge';
-                    // Store initial points for all selected objects
                     state.selectedObjectIds.forEach(objId => {
                         const o = state.objects.find(ob => ob.id === objId);
-                        if (o) state.initialPoints[objId] = JSON.parse(JSON.stringify(o.points));
+                        if (o) {
+                            state.initialPoints[objId] = JSON.parse(JSON.stringify(o.points));
+                            state.initialEdges[objId] = JSON.parse(JSON.stringify(o.edges));
+                            if (o.handles) state.initialHandles[objId] = JSON.parse(JSON.stringify(o.handles));
+                        }
                     });
                 }
                 render(canvas);
@@ -529,26 +766,23 @@
             }
 
             // --- Object hit testing with multi-selection ---
-            const hitObj = hitTestObject(pos);
+            const hitObj = hitTestObject(pos, canvas);
             if (hitObj) {
                 if (isCtrlClick) {
                     toggleObjectSelection(hitObj.id);
                 } else if (isShiftClick) {
                     selectObject(hitObj.id, true);
                 } else {
-                    // Double-click to toggle between select/rotate
-                    if (state.selectedObjectId === hitObj.id) {
-                        if (state.tool === 'select') setTool('rotate');
-                        else if (state.tool === 'rotate') setTool('select');
-                    } else {
-                        selectObject(hitObj.id, false);
-                    }
+                    selectObject(hitObj.id, false);
                 }
                 state.interaction = 'move';
-                // Store initial points for all selected objects
                 state.selectedObjectIds.forEach(objId => {
                     const o = state.objects.find(ob => ob.id === objId);
-                    if (o) state.initialPoints[objId] = JSON.parse(JSON.stringify(o.points));
+                    if (o) {
+                        state.initialPoints[objId] = JSON.parse(JSON.stringify(o.points));
+                        state.initialEdges[objId] = JSON.parse(JSON.stringify(o.edges));
+                        if (o.handles) state.initialHandles[objId] = JSON.parse(JSON.stringify(o.handles));
+                    }
                 });
                 render(canvas);
             } else {
@@ -580,7 +814,29 @@
             const mousePosEl = document.getElementById('mousePos');
             if (mousePosEl) mousePosEl.textContent = `${Math.round(pos.x)}, ${Math.round(pos.y)}`;
 
-            if (['polyline', 'arc'].includes(state.tool) && state.drawingPoints) {
+            if (['polyline', 'arc', 'spline'].includes(state.tool) && state.drawingPoints) {
+                // Handle spline handle dragging during drawing
+                if (state.tool === 'spline' && state.isDraggingHandle && state.drawingHandles) {
+                    const lastIdx = state.drawingPoints.length - 1;
+                    const pt = state.drawingPoints[lastIdx];
+                    
+                    if (state.draggingHandleType === 'out') {
+                        // Set the out handle of the last point
+                        state.drawingHandles[lastIdx].out = { x: pos.x, y: pos.y };
+                        // Mirror the in handle (opposite direction)
+                        const dx = pt.x - pos.x;
+                        const dy = pt.y - pos.y;
+                        state.drawingHandles[lastIdx].in = { x: pt.x + dx, y: pt.y + dy };
+                        
+                        // Update the in handle of the previous point if exists
+                        if (lastIdx > 0) {
+                            const prevHandle = state.drawingHandles[lastIdx - 1];
+                            if (prevHandle && prevHandle.out) {
+                                // Keep the previous point's out handle as is
+                            }
+                        }
+                    }
+                }
                 render(canvas);
                 return;
             }
@@ -616,23 +872,71 @@
                             selObj.points[i].x = initialPts[i].x + dx;
                             selObj.points[i].y = initialPts[i].y + dy;
                         }
+                        // Move bezier handles
+                        if (selObj.handles && state.initialHandles[objId]) {
+                            const initialHandles = state.initialHandles[objId];
+                            for(let i=0; i<selObj.handles.length; i++) {
+                                const handle = selObj.handles[i];
+                                const oldHandle = initialHandles[i];
+                                if (!handle || !oldHandle) continue;
+                                if (oldHandle.in) {
+                                    handle.in.x = oldHandle.in.x + dx;
+                                    handle.in.y = oldHandle.in.y + dy;
+                                }
+                                if (oldHandle.out) {
+                                    handle.out.x = oldHandle.out.x + dx;
+                                    handle.out.y = oldHandle.out.y + dy;
+                                }
+                            }
+                        }
                     }
                 });
                 render(canvas);
             } 
             else if (state.interaction === 'point') {
-                // Move all selected points
                 state.selectedPointIndices.forEach(({objectId, pointIndex}) => {
                     const selObj = state.objects.find(o => o.id === objectId);
                     if (selObj && state.initialPoints[objectId]) {
                         selObj.points[pointIndex].x = state.initialPoints[objectId][pointIndex].x + dx;
                         selObj.points[pointIndex].y = state.initialPoints[objectId][pointIndex].y + dy;
+                        if (selObj.handles && selObj.handles[pointIndex] && state.initialHandles[objectId] && state.initialHandles[objectId][pointIndex]) {
+                            const handle = selObj.handles[pointIndex];
+                            const oldHandle = state.initialHandles[objectId][pointIndex];
+                            if (oldHandle.in) {
+                                handle.in.x = oldHandle.in.x + dx;
+                                handle.in.y = oldHandle.in.y + dy;
+                            }
+                            if (oldHandle.out) {
+                                handle.out.x = oldHandle.out.x + dx;
+                                handle.out.y = oldHandle.out.y + dy;
+                            }
+                        }
+                        selObj.edges.forEach((edge, edgeIdx) => {
+                            if (edge.type === 'arc' && edge.points.includes(pointIndex)) {
+                                const p1 = selObj.points[edge.points[0]];
+                                const p2 = selObj.points[edge.points[1]];
+                                const chordDist = dist(p1, p2);
+                                const oldP1 = state.initialPoints[objectId][edge.points[0]];
+                                const oldP2 = state.initialPoints[objectId][edge.points[1]];
+                                const oldChordDist = dist(oldP1, oldP2);
+                                if (oldChordDist > 0 && chordDist > 0) {
+                                    const oldR = state.initialEdges[objectId] ? state.initialEdges[objectId][edgeIdx].rx : edge.rx;
+                                    if (oldR && oldR > oldChordDist / 2) {
+                                        const minR = chordDist / 2 + 0.1;
+                                        edge.rx = Math.max(minR, oldR * (chordDist / oldChordDist));
+                                        edge.ry = edge.rx;
+                                    } else {
+                                        edge.rx = Math.max(chordDist / 2, edge.rx || chordDist / 2);
+                                        edge.ry = edge.rx;
+                                    }
+                                }
+                            }
+                        });
                     }
                 });
                 render(canvas);
             }
             else if (state.interaction === 'edge') {
-                // Move all selected edges
                 state.selectedEdgeIndices.forEach(({objectId, edgeIndex}) => {
                     const selObj = state.objects.find(o => o.id === objectId);
                     if (selObj && state.initialPoints[objectId]) {
@@ -641,6 +945,20 @@
                             selObj.points[ptIdx].x = state.initialPoints[objectId][ptIdx].x + dx;
                             selObj.points[ptIdx].y = state.initialPoints[objectId][ptIdx].y + dy;
                         });
+                        if (edge.type === 'arc' && state.initialEdges[objectId]) {
+                            const p1 = selObj.points[edge.points[0]];
+                            const p2 = selObj.points[edge.points[1]];
+                            const chordDist = dist(p1, p2);
+                            const oldP1 = state.initialPoints[objectId][edge.points[0]];
+                            const oldP2 = state.initialPoints[objectId][edge.points[1]];
+                            const oldChordDist = dist(oldP1, oldP2);
+                            const oldR = state.initialEdges[objectId][edgeIndex].rx;
+                            if (oldChordDist > 0 && chordDist > 0 && oldR) {
+                                const minR = chordDist / 2 + 0.1;
+                                edge.rx = Math.max(minR, oldR * (chordDist / oldChordDist));
+                                edge.ry = edge.rx;
+                            }
+                        }
                     }
                 });
                 render(canvas);
@@ -677,6 +995,28 @@
                 
                 render(canvas);
             }
+            else if (state.interaction === 'bezier-handle') {
+                // Move the bezier handle
+                state.selectedHandleIndices.forEach(({objectId, pointIndex, handleType}) => {
+                    const selObj = state.objects.find(o => o.id === objectId);
+                    if (selObj && selObj.handles && selObj.handles[pointIndex] && state.initialHandles[objectId]) {
+                        const initialHandle = state.initialHandles[objectId][pointIndex];
+                        if (initialHandle && initialHandle[handleType]) {
+                            selObj.handles[pointIndex][handleType] = { x: pos.x, y: pos.y };
+                            
+                            // Mirror the opposite handle if the initial handles were mirrored
+                            const oppositeType = handleType === 'in' ? 'out' : 'in';
+                            const pt = selObj.points[pointIndex];
+                            if (initialHandle[oppositeType]) {
+                                const dx = pt.x - pos.x;
+                                const dy = pt.y - pos.y;
+                                selObj.handles[pointIndex][oppositeType] = { x: pt.x + dx, y: pt.y + dy };
+                            }
+                        }
+                    }
+                });
+                render(canvas);
+            }
             else if (state.interaction === 'resize') {
                 const oldB = state.initialBbox;
                 let newB = { ...oldB };
@@ -701,6 +1041,28 @@
                     const ry = pOld.y - oldB.y;
                     obj.points[i].x = newB.x + rx * scaleX;
                     obj.points[i].y = newB.y + ry * scaleY;
+                }
+                
+                // Transform bezier handles
+                if (obj.handles && state.initialHandles[obj.id]) {
+                    for(let i=0; i<obj.handles.length; i++) {
+                        const handle = obj.handles[i];
+                        const oldHandle = state.initialHandles[obj.id][i];
+                        if (!handle || !oldHandle) continue;
+                        
+                        if (oldHandle.in) {
+                            const rx = oldHandle.in.x - oldB.x;
+                            const ry = oldHandle.in.y - oldB.y;
+                            handle.in.x = newB.x + rx * scaleX;
+                            handle.in.y = newB.y + ry * scaleY;
+                        }
+                        if (oldHandle.out) {
+                            const rx = oldHandle.out.x - oldB.x;
+                            const ry = oldHandle.out.y - oldB.y;
+                            handle.out.x = newB.x + rx * scaleX;
+                            handle.out.y = newB.y + ry * scaleY;
+                        }
+                    }
                 }
 
                 obj.edges.forEach((edge, i) => {
@@ -732,6 +1094,25 @@
                     p.x = center.x + ox * cos - oy * sin;
                     p.y = center.y + ox * sin + oy * cos;
                 });
+                // Rotate bezier handles
+                if (obj.handles && state.initialHandles[obj.id]) {
+                    obj.handles.forEach((handle, i) => {
+                        const oldHandle = state.initialHandles[obj.id][i];
+                        if (!handle || !oldHandle) return;
+                        if (oldHandle.in) {
+                            const ox = oldHandle.in.x - center.x;
+                            const oy = oldHandle.in.y - center.y;
+                            handle.in.x = center.x + ox * cos - oy * sin;
+                            handle.in.y = center.y + ox * sin + oy * cos;
+                        }
+                        if (oldHandle.out) {
+                            const ox = oldHandle.out.x - center.x;
+                            const oy = oldHandle.out.y - center.y;
+                            handle.out.x = center.x + ox * cos - oy * sin;
+                            handle.out.y = center.y + ox * sin + oy * cos;
+                        }
+                    });
+                }
                 render(canvas);
             }
         });
@@ -787,9 +1168,12 @@
             }
 
             state.isDrawing = false;
+            state.isDraggingHandle = false;
+            state.draggingHandleType = null;
             state.interaction = null;
             state.initialPoints = {};
             state.initialEdges = {};
+            state.initialHandles = {};
             
             render(canvas);
         });
@@ -800,19 +1184,21 @@
             
             e.preventDefault();
             
-            if (['polyline', 'arc'].includes(state.tool) && state.drawingPoints && state.drawingPoints.length > 0) {
+            if (['polyline', 'arc', 'spline'].includes(state.tool) && state.drawingPoints && state.drawingPoints.length > 0) {
                 state.drawingPoints.pop();
                 if(state.drawingEdges.length > 0) state.drawingEdges.pop();
+                if(state.drawingHandles && state.drawingHandles.length > 0) state.drawingHandles.pop();
                 if (state.drawingPoints.length === 0) {
                     state.drawingPoints = null;
                     state.drawingEdges = null;
+                    state.drawingHandles = null;
                 }
                 render(canvas);
                 return;
             }
 
             const pos = getMousePos(e, canvas);
-            const hit = hitTestObject(pos);
+            const hit = hitTestObject(pos, canvas);
             if(hit) {
                 selectObject(hit.id, false);
                 render(canvas);
@@ -822,6 +1208,23 @@
                     contextMenu.style.left = e.clientX + 'px';
                     contextMenu.style.top = e.clientY + 'px';
                     contextMenu.classList.add('visible');
+                }
+            }
+        });
+
+        canvas.addEventListener('dblclick', e => {
+            const { state, getMousePos, hitTestObject, setTool } = VectorEditor;
+            
+            if (!['select', 'rotate'].includes(state.tool)) return;
+            
+            const pos = getMousePos(e, canvas);
+            const hitObj = hitTestObject(pos, canvas);
+            
+            if (hitObj && state.selectedObjectId === hitObj.id) {
+                if (state.tool === 'select') {
+                    setTool('rotate');
+                } else if (state.tool === 'rotate') {
+                    setTool('select');
                 }
             }
         });
@@ -837,5 +1240,6 @@
     window.VectorEditor.renderPreview = renderPreview;
     window.VectorEditor.finishDrawing = finishDrawing;
     window.VectorEditor.initBoard = initBoard;
+    window.VectorEditor.getBezierCurveCommand = getBezierCurveCommand;
 
 })();

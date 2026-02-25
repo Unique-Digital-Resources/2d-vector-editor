@@ -13,9 +13,10 @@
     function setTool(toolName) {
         const { state, render } = VectorEditor;
         
-        if (state.drawingPoints && !['polyline', 'arc'].includes(toolName)) {
+        if (state.drawingPoints && !['polyline', 'arc', 'spline'].includes(toolName)) {
             state.drawingPoints = null;
             state.drawingEdges = null;
+            state.drawingHandles = null;
         }
 
         state.tool = toolName;
@@ -35,7 +36,8 @@
                 circle: 'Circle', 
                 polygon: 'Polygon', 
                 polyline: 'Lines', 
-                arc: 'Arc' 
+                arc: 'Arc',
+                spline: 'Spline' 
             };
             toolStatus.textContent = names[toolName] || 'Select';
         }
@@ -81,7 +83,11 @@
             }
 
             if (e.key === 'Control' && state.drawingPoints) {
-                const nextTool = state.tool === 'polyline' ? 'arc' : 'polyline';
+                const drawingTools = ['polyline', 'arc', 'spline'];
+                const currentIdx = drawingTools.indexOf(state.tool);
+                const nextTool = drawingTools[(currentIdx + 1) % drawingTools.length];
+                state.isDraggingHandle = false;
+                state.draggingHandleType = null;
                 setTool(nextTool);
                 return;
             }
@@ -99,14 +105,22 @@
                         setTool('arc');
                     }
                     break;
+                case 's':
+                    // Only handle 's' without modifiers (for spline tool)
+                    if (!e.ctrlKey && !e.metaKey) {
+                        setTool('spline');
+                    }
+                    break;
                 case 'delete': 
                 case 'backspace':
                     if (state.drawingPoints) {
                          state.drawingPoints.pop();
                          if(state.drawingEdges.length > 0) state.drawingEdges.pop();
+                         if (state.drawingHandles && state.drawingHandles.length > 0) state.drawingHandles.pop();
                          if (state.drawingPoints.length === 0) {
                              state.drawingPoints = null;
                              state.drawingEdges = null;
+                             state.drawingHandles = null;
                          }
                          if (canvas && render) render(canvas);
                     } else if (state.selectedObjectIds.length > 0) {

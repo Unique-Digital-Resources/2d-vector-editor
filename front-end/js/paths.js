@@ -21,6 +21,9 @@ const state = {
     selectedPointIndex: null,
     selectedEdgeIndex: null,
     
+    // Bezier handle selection
+    selectedHandleIndices: [],  // Array of {objectId, pointIndex, handleType: 'in'|'out'}
+    
     interaction: null, 
     dragStart: { x: 0, y: 0 },
     resizeHandle: null,
@@ -28,6 +31,7 @@ const state = {
     initialPoints: {},  // Object keyed by objectId containing arrays of points
     initialBbox: null,
     initialEdges: {},   // Object keyed by objectId containing arrays of edges
+    initialHandles: {}, // Object keyed by objectId containing arrays of {in: {x,y}, out: {x,y}}
     rotationCenter: null, 
     
     objectCounter: 0,
@@ -39,7 +43,11 @@ const state = {
     // Drawing State
     drawingPoints: null, 
     drawingEdges: null,  
+    drawingHandles: null,       // Array of {in: {x,y}, out: {x,y}} for each point during spline drawing
     currentMouse: {x:0, y:0},
+    isDraggingHandle: false,    // True when dragging a bezier handle during drawing
+    draggingHandleType: null,   // 'in' or 'out'
+    isDrawingSpline: false,     // True when actively drawing a spline
     
     // Arc Specifics
     arcAngle: 90,
@@ -79,8 +87,95 @@ function getBoundingBox(points) {
     return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 }
 
+function getBezierPoint(p0, p1, cp0, cp1, t) {
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const mt = 1 - t;
+    const mt2 = mt * mt;
+    const mt3 = mt2 * mt;
+    
+    return {
+        x: mt3 * p0.x + 3 * mt2 * t * (cp0 ? cp0.x : p0.x) + 3 * mt * t2 * (cp1 ? cp1.x : p1.x) + t3 * p1.x,
+        y: mt3 * p0.y + 3 * mt2 * t * (cp0 ? cp0.y : p0.y) + 3 * mt * t2 * (cp1 ? cp1.y : p1.y) + t3 * p1.y
+    };
+}
+
 function getTransformedBoundingBox(obj) {
-    return getBoundingBox(obj.points);
+    if (!obj.points || obj.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+    
+    const xs = [];
+    const ys = [];
+    const samples = 50;
+    
+    obj.points.forEach(p => {
+        xs.push(p.x);
+        ys.push(p.y);
+    });
+    
+    if (obj.edges) {
+        obj.edges.forEach(edge => {
+            const p1 = obj.points[edge.points[0]];
+            const p2 = obj.points[edge.points[1]];
+            
+            if (edge.type === 'bezier' && obj.handles) {
+                const h1 = obj.handles[edge.points[0]] ? obj.handles[edge.points[0]].out : null;
+                const h2 = obj.handles[edge.points[1]] ? obj.handles[edge.points[1]].in : null;
+                
+                for (let i = 0; i <= samples; i++) {
+                    const t = i / samples;
+                    const pt = getBezierPoint(p1, p2, h1, h2, t);
+                    xs.push(pt.x);
+                    ys.push(pt.y);
+                }
+            } else if (edge.type === 'arc') {
+                const cx = (p1.x + p2.x) / 2;
+                const cy = (p1.y + p2.y) / 2;
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const d = Math.sqrt(dx * dx + dy * dy);
+                
+                const r = edge.rx || d / 2;
+                const largeArc = edge.largeArc || 0;
+                const sweep = edge.sweep || 0;
+                const chordAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                
+                const h = Math.sqrt(Math.max(0, r * r - (d/2) * (d/2)));
+                const sign = sweep === 1 ? 1 : -1;
+                const perpX = -Math.sin(chordAngle);
+                const perpY = Math.cos(chordAngle);
+                
+                const centerX = cx + sign * h * perpX;
+                const centerY = cy + sign * h * perpY;
+                
+                const angle1 = Math.atan2(p1.y - centerY, p1.x - centerX);
+                const angle2 = Math.atan2(p2.y - centerY, p2.x - centerX);
+                
+                let startAngle = angle1;
+                let endAngle = angle2;
+                if (sweep === 1) {
+                    if (endAngle < startAngle) endAngle += 2 * Math.PI;
+                    if (largeArc === 1) endAngle += 2 * Math.PI;
+                } else {
+                    if (endAngle > startAngle) endAngle -= 2 * Math.PI;
+                    if (largeArc === 1) endAngle -= 2 * Math.PI;
+                }
+                
+                for (let i = 0; i <= samples; i++) {
+                    const t = i / samples;
+                    const angle = startAngle + t * (endAngle - startAngle);
+                    xs.push(centerX + r * Math.cos(angle));
+                    ys.push(centerY + r * Math.sin(angle));
+                }
+            } else {
+                xs.push(p1.x, p2.x);
+                ys.push(p1.y, p2.y);
+            }
+        });
+    }
+    
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 }
 
 // ============================================
@@ -135,6 +230,7 @@ function clearSelections() {
     state.selectedObjectIds = [];
     state.selectedPointIndices = [];
     state.selectedEdgeIndices = [];
+    state.selectedHandleIndices = [];
     state.selectedObjectId = null;
     state.selectedPointIndex = null;
     state.selectedEdgeIndex = null;
@@ -537,16 +633,167 @@ function distToSegment(p, a, b) {
     return dist(p, { x: a.x + t * ab.x, y: a.y + t * ab.y });
 }
 
-function hitTestObject(pos) {
+function distToBezier(p, p0, p1, cp0, cp1, samples = 20) {
+    let minDist = Infinity;
+    for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const mt3 = mt2 * mt;
+        
+        const x = mt3 * p0.x + 3 * mt2 * t * (cp0 ? cp0.x : p0.x) + 3 * mt * t2 * (cp1 ? cp1.x : p1.x) + t3 * p1.x;
+        const y = mt3 * p0.y + 3 * mt2 * t * (cp0 ? cp0.y : p0.y) + 3 * mt * t2 * (cp1 ? cp1.y : p1.y) + t3 * p1.y;
+        
+        const d = dist(p, { x, y });
+        if (d < minDist) minDist = d;
+    }
+    return minDist;
+}
+
+function distToArc(p, p1, p2, edge, samples = 30) {
+    const rx = edge.rx || 0;
+    const ry = edge.ry || rx;
+    const largeArc = edge.largeArc || 0;
+    const sweep = edge.sweep || 0;
+    
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    
+    if (d < 1) return dist(p, p1);
+    
+    const chordAngle = Math.atan2(dy, dx);
+    const r = Math.max(rx, ry);
+    const h = Math.sqrt(Math.max(0, r * r - (d/2) * (d/2)));
+    const sign = sweep === 1 ? 1 : -1;
+    const perpX = -Math.sin(chordAngle);
+    const perpY = Math.cos(chordAngle);
+    
+    const cx = (p1.x + p2.x) / 2 + sign * h * perpX;
+    const cy = (p1.y + p2.y) / 2 + sign * h * perpY;
+    
+    const angle1 = Math.atan2(p1.y - cy, p1.x - cx);
+    const angle2 = Math.atan2(p2.y - cy, p2.x - cx);
+    
+    let startAngle = angle1;
+    let endAngle = angle2;
+    
+    if (sweep === 1) {
+        if (endAngle < startAngle) endAngle += 2 * Math.PI;
+        if (largeArc === 1) endAngle += 2 * Math.PI;
+    } else {
+        if (endAngle > startAngle) endAngle -= 2 * Math.PI;
+        if (largeArc === 1) endAngle -= 2 * Math.PI;
+    }
+    
+    let minDist = Infinity;
+    for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const angle = startAngle + t * (endAngle - startAngle);
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        const d = dist(p, { x, y });
+        if (d < minDist) minDist = d;
+    }
+    return minDist;
+}
+
+function hitTestObject(pos, canvas = null) {
     for (let i = state.objects.length - 1; i >= 0; i--) {
         const obj = state.objects[i];
-        const bbox = getTransformedBoundingBox(obj);
-        if (pos.x >= bbox.x - 5 && pos.x <= bbox.x + bbox.width + 5 &&
-            pos.y >= bbox.y - 5 && pos.y <= bbox.y + bbox.height + 5) {
-            return obj;
+        
+        if (obj.closed && obj.fill !== 'none' && canvas) {
+            const pathStr = getObjectPathString(obj);
+            if (pathStr) {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', pathStr);
+                path.setAttribute('fill', obj.fill || '#000');
+                canvas.appendChild(path);
+                const point = canvas.createSVGPoint();
+                point.x = pos.x;
+                point.y = pos.y;
+                const isInside = path.isPointInFill(point);
+                canvas.removeChild(path);
+                if (isInside) return obj;
+            }
         }
+        
+        let hitStroke = false;
+        for (let j = 0; j < obj.edges.length; j++) {
+            const edge = obj.edges[j];
+            const p1 = obj.points[edge.points[0]];
+            const p2 = obj.points[edge.points[1]];
+            
+            if (edge.type === 'bezier' && obj.handles) {
+                const h1 = obj.handles[edge.points[0]] ? obj.handles[edge.points[0]].out : null;
+                const h2 = obj.handles[edge.points[1]] ? obj.handles[edge.points[1]].in : null;
+                if (distToBezier(pos, p1, p2, h1, h2) < 10) { hitStroke = true; break; }
+            } else if (edge.type === 'arc') {
+                if (distToArc(pos, p1, p2, edge) < 12) { hitStroke = true; break; }
+            } else {
+                if (distToSegment(pos, p1, p2) < 10) { hitStroke = true; break; }
+            }
+        }
+        if (hitStroke) return obj;
     }
     return null;
+}
+
+function hitTestFilledShape(pos, canvas) {
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+        const obj = state.objects[i];
+        if (!obj.closed || obj.fill === 'none') continue;
+        
+        const pathStr = getObjectPathString(obj);
+        if (!pathStr) continue;
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathStr);
+        path.setAttribute('fill', obj.fill || '#000');
+        canvas.appendChild(path);
+        
+        const point = canvas.createSVGPoint();
+        point.x = pos.x;
+        point.y = pos.y;
+        
+        const isInside = path.isPointInFill(point);
+        canvas.removeChild(path);
+        
+        if (isInside) return obj;
+    }
+    return null;
+}
+
+function getObjectPathString(obj) {
+    if (!obj.points || obj.points.length === 0) return null;
+    
+    let d = `M ${obj.points[0].x} ${obj.points[0].y} `;
+    
+    if (obj.edges) {
+        obj.edges.forEach(edge => {
+            const p2 = obj.points[edge.points[1]];
+            if (edge.type === 'bezier' && obj.handles) {
+                const p1Idx = edge.points[0];
+                const h1 = obj.handles[p1Idx] ? obj.handles[p1Idx].out : null;
+                const h2 = obj.handles[edge.points[1]] ? obj.handles[edge.points[1]].in : null;
+                const cp1 = h1 || obj.points[p1Idx];
+                const cp2 = h2 || p2;
+                d += `C ${cp1.x} ${cp1.y} ${cp2.x} ${cp2.y} ${p2.x} ${p2.y} `;
+            } else if (edge.type === 'arc') {
+                const { rx, ry, rotation, largeArc, sweep } = edge;
+                const rX = Math.max(0.1, rx || 0.1);
+                const rY = Math.max(0.1, ry || 0.1);
+                d += `A ${rX} ${rY} ${rotation||0} ${largeArc||0} ${sweep||0} ${p2.x} ${p2.y} `;
+            } else {
+                d += `L ${p2.x} ${p2.y} `;
+            }
+        });
+    }
+    
+    if (obj.closed) d += 'Z';
+    return d;
 }
 
 function hitTestEdge(pos, obj) {
@@ -555,7 +802,16 @@ function hitTestEdge(pos, obj) {
         const edge = obj.edges[i];
         const p1 = obj.points[edge.points[0]];
         const p2 = obj.points[edge.points[1]];
-        if (distToSegment(pos, p1, p2) < 10) return i;
+        
+        if (edge.type === 'bezier' && obj.handles) {
+            const h1 = obj.handles[edge.points[0]] ? obj.handles[edge.points[0]].out : null;
+            const h2 = obj.handles[edge.points[1]] ? obj.handles[edge.points[1]].in : null;
+            if (distToBezier(pos, p1, p2, h1, h2) < 10) return i;
+        } else if (edge.type === 'arc') {
+            if (distToArc(pos, p1, p2, edge) < 12) return i;
+        } else {
+            if (distToSegment(pos, p1, p2) < 10) return i;
+        }
     }
     return null;
 }
@@ -579,6 +835,64 @@ function hitTestPoint(pos, obj) {
         if (dist(pos, obj.points[i]) < 10) return i;
     }
     return null;
+}
+
+function hitTestBezierHandle(pos, obj, pointIndex) {
+    if (!obj || !obj.handles || !obj.handles[pointIndex]) return null;
+    const handle = obj.handles[pointIndex];
+    if (handle.in && dist(pos, handle.in) < 8) return 'in';
+    if (handle.out && dist(pos, handle.out) < 8) return 'out';
+    return null;
+}
+
+function hitTestDrawingHandle(pos) {
+    if (!state.drawingHandles || !state.drawingPoints) return null;
+    const lastIdx = state.drawingPoints.length - 1;
+    if (lastIdx < 0) return null;
+    
+    const handle = state.drawingHandles[lastIdx];
+    if (!handle) return null;
+    
+    if (handle.in && dist(pos, handle.in) < 8) return 'in';
+    if (handle.out && dist(pos, handle.out) < 8) return 'out';
+    return null;
+}
+
+function isHandleSelected(objectId, pointIndex, handleType) {
+    return state.selectedHandleIndices.some(h => 
+        h.objectId === objectId && h.pointIndex === pointIndex && h.handleType === handleType
+    );
+}
+
+function selectHandle(objectId, pointIndex, handleType, addToSelection = false) {
+    if (!addToSelection) {
+        state.selectedHandleIndices = [];
+    }
+    
+    const key = { objectId, pointIndex, handleType };
+    if (!state.selectedHandleIndices.some(h => 
+        h.objectId === objectId && h.pointIndex === pointIndex && h.handleType === handleType
+    )) {
+        state.selectedHandleIndices.push(key);
+    }
+    
+    state.selectedObjectId = objectId;
+    state.selectedPointIndex = pointIndex;
+    
+    if (!state.selectedObjectIds.includes(objectId)) {
+        state.selectedObjectIds.push(objectId);
+    }
+}
+
+function toggleHandleSelection(objectId, pointIndex, handleType) {
+    const idx = state.selectedHandleIndices.findIndex(h => 
+        h.objectId === objectId && h.pointIndex === pointIndex && h.handleType === handleType
+    );
+    if (idx >= 0) {
+        state.selectedHandleIndices.splice(idx, 1);
+    } else {
+        selectHandle(objectId, pointIndex, handleType, true);
+    }
 }
 
 // ============================================
@@ -649,14 +963,21 @@ window.VectorEditor = {
     getArcParamsFromAngle,
     getArcCurveCommand,
     distToSegment,
+    distToBezier,
+    distToArc,
     hitTestObject,
+    hitTestFilledShape,
     hitTestEdge,
     hitTestHandle,
     hitTestPoint,
+    hitTestBezierHandle,
+    hitTestDrawingHandle,
+    isHandleSelected,
+    selectHandle,
+    toggleHandleSelection,
     createRectangle,
     createCircle,
     createPolygon,
-    // Selection management
     clearSelections,
     isObjectSelected,
     isPointSelected,
