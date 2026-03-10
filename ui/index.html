@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VectorEdit</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     MAIN  (toolbar | canvas | side-panel)
+════════════════════════════════════════════ -->
+<div class="main-container">
+
+    <!-- ═══ LEFT TOOLBAR ═══ -->
+    <div class="toolbar" id="toolbar">
+        <div class="toolbar-group">
+            <button class="tool-btn active" data-tool="select"   title="Select / Move (V)">
+                <i class="mdi mdi-cursor-default-outline"></i><span class="shortcut">V</span></button>
+            <button class="tool-btn"        data-tool="rotate"   title="Rotate (O)">
+                <i class="mdi mdi-rotate-left"></i><span class="shortcut">O</span></button>
+        </div>
+        <div class="toolbar-group">
+            <button class="tool-btn" data-tool="rectangle" title="Rectangle (R)">
+                <i class="mdi mdi-rectangle-outline"></i><span class="shortcut">R</span></button>
+            <button class="tool-btn" data-tool="ellipse"   title="Ellipse (E)">
+                <i class="mdi mdi-circle-outline"></i><span class="shortcut">E</span></button>
+            <button class="tool-btn" data-tool="polygon"   title="Polygon (Y)">
+                <i class="mdi mdi-hexagon-outline"></i><span class="shortcut">Y</span></button>
+            <button class="tool-btn" data-tool="star"      title="Star (S)">
+                <i class="mdi mdi-star-outline"></i><span class="shortcut">S</span></button>
+        </div>
+        <div class="toolbar-group">
+            <button class="tool-btn" data-tool="polyline"  title="Polyline (L)">
+                <i class="mdi mdi-vector-polyline"></i><span class="shortcut">L</span></button>
+            <button class="tool-btn" data-tool="cubic"     title="Cubic Bézier (C)">
+                <i class="mdi mdi-vector-bezier"></i><span class="shortcut">C</span></button>
+            <button class="tool-btn" data-tool="quadratic" title="Quadratic Bézier (Q)">
+                <i class="mdi mdi-vector-square"></i><span class="shortcut">Q</span></button>
+            <button class="tool-btn" data-tool="arc"       title="Arc (A)">
+                <i class="mdi mdi-vector-circle"></i><span class="shortcut">A</span></button>
+            <button class="tool-btn" data-tool="freehand"  title="Freehand (F)">
+                <i class="mdi mdi-draw"></i><span class="shortcut">F</span></button>
+        </div>
+    </div>
+
+    <!-- ═══ CANVAS ═══ -->
+    <div class="canvas-area">
+        <div class="canvas-container" id="canvasContainer">
+            <svg id="canvas" xmlns="http://www.w3.org/2000/svg"><defs></defs></svg>
+        </div>
+    </div>
+
+    <!-- ═══ SIDE PANEL (Blender vertical tabs) ═══ -->
+    <div class="side-panel" id="sidePanel">
+
+        <!-- Icon strip -->
+        <div class="vtab-icon-strip" id="vtabIconStrip"></div>
+
+        <!-- Pane area -->
+        <div class="vtab-pane-area">
+            <div class="vtab-pane-header">
+                <span id="vtabPaneTitle">Objects</span>
+            </div>
+
+            <!-- Objects -->
+            <div class="vtab-pane" data-tab="objects" style="display:flex;">
+                <div class="vtab-scroll">
+                    <div id="vtabObjectsList"></div>
+                </div>
+            </div>
+
+            <!-- Properties -->
+            <div class="vtab-pane" data-tab="properties" style="display:none;">
+                <div class="vtab-scroll">
+                    <div id="vtabPropertiesPane"></div>
+                </div>
+            </div>
+
+            <!-- Modifiers -->
+            <div class="vtab-pane" data-tab="modifiers" style="display:none;">
+                <div id="vtabModifiersPane"
+                     style="display:flex; flex-direction:column; flex:1; overflow:hidden; min-height:0;"></div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════
+     STATUS BAR
+     Contains: logo · tool indicator · contextual shortcut hints · coords · count · zoom
+════════════════════════════════════════════ -->
+<div class="status-bar" id="statusBar">
+
+    <!-- Logo -->
+    <div class="status-logo">
+        <i class="mdi mdi-vector-bezier"></i> VectorEdit
+    </div>
+
+    <div class="status-sep"></div>
+
+    <!-- Current tool -->
+    <div class="status-item">
+        <span class="status-dot"></span>
+        <span id="toolStatus">Select</span>
+    </div>
+
+    <div class="status-sep"></div>
+
+    <!-- Contextual shortcut hints strip (changes per tool) -->
+    <div class="status-hints-strip" id="statusHints">
+        <!-- Populated by status-bar.js -->
+    </div>
+
+    <!-- Right side: coords + count + zoom -->
+    <div class="status-right">
+        <div class="status-sep" style="margin:0 0 0 0;"></div>
+        <span class="status-coords" id="mousePos">0, 0</span>
+        <span class="status-count"  id="objectCount">0 objects</span>
+        <span class="status-zoom"   id="zoomLevel">100%</span>
+    </div>
+
+</div>
+
+<!-- CONTEXT MENU -->
+<div class="context-menu" id="contextMenu">
+    <div class="context-item" data-action="duplicate">
+        <i class="mdi mdi-content-copy"></i> Duplicate
+        <span class="shortcut">Ctrl+D</span>
+    </div>
+    <div class="context-item" data-action="delete">
+        <i class="mdi mdi-delete-outline"></i> Delete
+        <span class="shortcut">Del</span>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     SCRIPTS  —  strict load order: core → application → ui
+════════════════════════════════════════════ -->
+
+<!-- Core -->
+<script src="../core/index.js"></script>
+<script src="../core/errors/DomainErrors.js"></script>
+<script src="../core/events/DomainEvents.js"></script>
+<script src="../core/services/IdGenerator.js"></script>
+<script src="../core/entities/VectorObject.js"></script>
+<script src="../core/entities/Document.js"></script>
+
+<!-- Application -->
+<script src="../application/CommandRegistry.js"></script>
+<script src="../application/EventBus.js"></script>
+<script src="../application/commands/CreateShape.js"></script>
+<script src="../application/commands/DeleteObject.js"></script>
+<script src="../application/commands/UpdateStyle.js"></script>
+<script src="../application/commands/DuplicateObject.js"></script>
+<script src="../application/ModifierRegistry.js"></script>
+<script src="../application/commands/AddModifier.js"></script>
+<script src="../application/commands/ModifierCommands.js"></script>
+<script src="../application/index.js"></script>
+
+<!-- UI: state + geometry + selection + hit-testing -->
+<script src="components/state.js"></script>
+<script src="components/geometry.js"></script>
+<script src="components/selection.js"></script>
+<script src="components/hit-testing.js"></script>
+
+<!-- UI: modifier computation (Paper.js, must precede render) -->
+<script src="components/modifiers/array.js"></script>
+<script src="components/modifiers/boolean.js"></script>
+<script src="components/modifier-engine.js"></script>
+
+<!-- UI: rendering -->
+<script src="components/render.js"></script>
+<script src="components/toolbar.js"></script>
+
+<!-- UI: drawing tools -->
+<script src="components/tools/rectangle-tool.js"></script>
+<script src="components/tools/ellipse-tool.js"></script>
+<script src="components/tools/polygon-tool.js"></script>
+<script src="components/tools/star-tool.js"></script>
+<script src="components/tools/drawing-engine.js"></script>
+<script src="components/tools/polyline-tool.js"></script>
+<script src="components/tools/cubic-bezier-tool.js"></script>
+<script src="components/tools/quadratic-bezier-tool.js"></script>
+<script src="components/tools/arc-tool.js"></script>
+<script src="components/tools/freehand-tool.js"></script>
+
+<!-- UI: panels -->
+<script src="components/side-tabs.js"></script>
+<script src="components/objects-tab.js"></script>
+<script src="components/properties-tab.js"></script>
+<script src="components/modifiers-tab.js"></script>
+<script src="components/status-bar.js"></script>
+<script src="components/board-events.js"></script>
+
+<!-- Bootstrap -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('canvas');
+
+    VectorEditor.initToolbar();
+    VectorEditor.initKeyboardShortcuts?.();
+
+    VectorEditor.initSideTabs();
+    VectorEditor.initObjectsTab();
+    VectorEditor.initPropertiesTab();
+    VectorEditor.initModifiersTab();
+
+    VectorEditor.initStatusBar();
+    VectorEditor.initBoard(canvas);
+
+    VectorEditor.render(canvas);
+
+    console.log('VectorEdit ✓  Commands:', VectorEditor.app.commandRegistry.list());
+});
+</script>
+
+</body>
+</html>
