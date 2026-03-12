@@ -37,6 +37,7 @@
         if (cmds.ReorderModifier)          commandRegistry.register(cmds.ReorderModifier);
         if (cmds.ToggleModifierVisibility) commandRegistry.register(cmds.ToggleModifierVisibility);
         if (cmds.MoveModifierBefore)       commandRegistry.register(cmds.MoveModifierBefore);
+        if (cmds.ApplyModifier)            commandRegistry.register(cmds.ApplyModifier);
 
         // ── Expose app object ───────────────────────────────────────────
         VectorEditor.app = {

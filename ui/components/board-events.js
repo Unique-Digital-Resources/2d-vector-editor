@@ -116,6 +116,8 @@
                         } else {
                             selectSegment(objId, curveIdx, false);
                         }
+                        state.interaction = 'segment';
+                        storeInitialTransforms();
                         render(svgCanvas);
                         return;
                     }
@@ -224,6 +226,27 @@
                             initPt.x + dx,
                             initPt.y + dy
                         );
+                        syncPathToCore(objectId);
+                    }
+                });
+                render(svgCanvas);
+            } else if (state.interaction === 'segment') {
+                state.selectedSegmentIndices.forEach(({ objectId, segmentIndex }) => {
+                    const pp       = state.paperPaths[objectId];
+                    const initData = state.initialBounds[objectId];
+                    if (!pp || !initData || !initData.segments) return;
+                    
+                    const n = pp.segments.length;
+                    const seg1Idx = segmentIndex;
+                    const seg2Idx = (segmentIndex + 1) % n;
+                    
+                    if (initData.segments[seg1Idx] && initData.segments[seg2Idx]) {
+                        const initPt1 = initData.segments[seg1Idx];
+                        const initPt2 = initData.segments[seg2Idx];
+                        
+                        pp.segments[seg1Idx].point = new paper.Point(initPt1.x + dx, initPt1.y + dy);
+                        pp.segments[seg2Idx].point = new paper.Point(initPt2.x + dx, initPt2.y + dy);
+                        
                         syncPathToCore(objectId);
                     }
                 });

@@ -326,6 +326,7 @@ body {
 .mod-hbtn:hover   { background: var(--bg-hover); color: var(--text-primary); }
 .mod-hbtn:disabled{ opacity: 0.25; cursor: not-allowed; pointer-events: none; }
 .mod-del:hover    { background: rgba(239,68,68,0.2); color: var(--danger); }
+.mod-apply:hover  { background: rgba(16,185,129,0.2); color: var(--accent); }
 
 .mod-body { padding: 8px; }
 

@@ -154,6 +154,9 @@
             <button class="mod-hbtn mod-collapse" title="Collapse">
                 <i class="mdi ${mod.collapsed ? 'mdi-chevron-right' : 'mdi-chevron-down'}"></i>
             </button>
+            <button class="mod-hbtn mod-apply" title="Apply (make destructive)">
+                <i class="mdi mdi-check"></i>
+            </button>
             <button class="mod-hbtn mod-del" title="Remove modifier">
                 <i class="mdi mdi-close"></i>
             </button>
@@ -198,6 +201,18 @@
             card.classList.toggle('mod-collapsed');
             const icon = header.querySelector('.mod-collapse i');
             if (icon) icon.className = `mdi ${body.style.display === 'none' ? 'mdi-chevron-right' : 'mdi-chevron-down'}`;
+        });
+
+        header.querySelector('.mod-apply')?.addEventListener('click', e => {
+            e.stopPropagation();
+            const result = VectorEditor.app.execute('applyModifier', { objectId, modifierId: mod.id });
+            if (result && result.applied) {
+                VectorEditor.app.execute('removeModifier', { objectId, modifierId: mod.id });
+                _renderStack(objectId);
+                _doRender();
+            } else if (result && result.error) {
+                alert('Failed to apply modifier: ' + result.error);
+            }
         });
 
         header.querySelector('.mod-del')?.addEventListener('click', e => {
