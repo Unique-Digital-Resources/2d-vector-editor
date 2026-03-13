@@ -61,35 +61,63 @@
             }
 
             if (produced.length === 1) {
-                const newPathData = produced[0].pp.pathData;
-                produced[0].pp.remove();
+                /* ── Single result (e.g. boolean op) ────────────────────── */
+                const newPP = produced[0].pp;          // keep the live Paper.js path
+                const newPathData = newPP.pathData;
                 basePP.remove();
-                
-                const b = sourcePP.bounds;
+
+                const b = newPP.bounds;
                 obj.updatePathData(newPathData, { x: b.x, y: b.y, width: b.width, height: b.height });
-                
-                const paper = window.paper;
-                const newPP = new paper.Path(newPathData);
-                if (obj.closed) newPP.closed = true;
-                state.paperPaths[objectId] = newPP;
+
+                /* Flatten CompoundPath → simple Path so the rest of the
+                   editor (render, hit-test, anchor gizmos) works uniformly */
+                if (newPP.className === 'CompoundPath') {
+                    const flat = new paper.Path(newPathData);
+                    if (obj.closed) flat.closed = true;
+                    newPP.remove();
+                    state.paperPaths[objectId] = flat;
+                } else {
+                    state.paperPaths[objectId] = newPP;
+                }
                 sourcePP.remove();
 
                 return { applied: true };
             } else {
-                let resultPathData = produced.map(p => p.pp.pathData).join(' ');
-                produced.forEach(p => p.pp.remove());
-                basePP.remove();
+                /* ── Multiple results (e.g. array modifier) ─────────────── */
+                /* Each produced path becomes its own VectorObject so that
+                   hit-testing, rendering and selection all work naturally
+                   (no CompoundPath or multi-subpath issues). */
 
-                const b = sourcePP.bounds;
-                obj.updatePathData(resultPathData, { x: b.x, y: b.y, width: b.width, height: b.height });
-                
-                const paper = window.paper;
-                const newPP = new paper.Path(resultPathData);
-                if (obj.closed) newPP.closed = true;
-                state.paperPaths[objectId] = newPP;
+                // Update the original object with the first produced copy
+                const firstPP = produced[0].pp;
+                const firstPathData = firstPP.pathData;
+                const fb = firstPP.bounds;
+                obj.updatePathData(firstPathData, { x: fb.x, y: fb.y, width: fb.width, height: fb.height });
+                state.paperPaths[objectId] = firstPP;
+
+                // Create new independent objects for the remaining copies
+                const newObjectIds = [];
+                for (let i = 1; i < produced.length; i++) {
+                    const pp = produced[i].pp;
+                    const pd = pp.pathData;
+                    const pb = pp.bounds;
+
+                    const result = VectorEditor.app.execute('createShape', {
+                        type: obj.type,
+                        pathData: pd,
+                        bounds: { x: pb.x, y: pb.y, width: pb.width, height: pb.height },
+                        closed: obj.closed,
+                        style: { fill: obj.fill, stroke: obj.stroke, strokeWidth: obj.strokeWidth }
+                    });
+
+                    state.paperPaths[result.objectId] = pp;
+                    newObjectIds.push(result.objectId);
+                }
+
+                basePP.remove();
                 sourcePP.remove();
 
-                return { applied: true, note: 'Multiple paths created - combined as group' };
+                return { applied: true, newObjectIds, note: 'Array expanded into individual objects' };
             }
         }
     };
