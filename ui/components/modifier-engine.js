@@ -20,8 +20,12 @@
 
     /** Map type strings → VectorEditor.Modifiers sub-module */
     const TYPE_MAP = {
+        'pivot-point': () => VectorEditor.Modifiers?.['pivot-point'],
         'array':   () => VectorEditor.Modifiers?.array,
         'boolean': () => VectorEditor.Modifiers?.boolean,
+        'wrap': () => VectorEditor.Modifiers?.wrap,
+        'follow-path': () => VectorEditor.Modifiers?.['follow-path'],
+        'gooey':      () => VectorEditor.Modifiers?.gooey,
     };
 
     /**

@@ -10,7 +10,7 @@
  */
 (function () {
 
-    const ALLOWED_TYPES = new Set(['array', 'boolean']);
+    const ALLOWED_TYPES = new Set(['array', 'boolean', 'pivot-point', 'wrap', 'follow-path', 'gooey']);
 
     const command = {
         id: 'addModifier',

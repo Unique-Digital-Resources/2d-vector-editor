@@ -66,6 +66,23 @@
             if (bbox) _renderGizmo(g, bbox);
         }
 
+        // ── Pivot Point gizmo ───────────────────────────────────────────
+        state.selectedObjectIds.forEach(id => {
+            const registry = VectorEditor.app?.modifierRegistry;
+            if (!registry) return;
+            const stack = registry.getStack(id);
+            for (const mod of stack) {
+                if (mod.type === 'pivot-point' && mod.visible && mod.params.showGizmo !== false) {
+                    const ppMod = VectorEditor.Modifiers?.['pivot-point'];
+                    if (ppMod && ppMod.computePivot) {
+                        const pivot = ppMod.computePivot(id, mod.params);
+                        if (pivot) _renderPivotGizmo(g, pivot);
+                    }
+                    break;
+                }
+            }
+        });
+
         // ── Freehand start indicator ──────────────────────────────────────
         if (state.isDrawing && state.freehandStartPos) {
             _renderFreehandStart(g, state.freehandStartPos, state.currentMouse);
@@ -295,6 +312,40 @@
             grp.appendChild(rh);
             grp.appendChild(svg('line', { x1: rx, y1: bbox.y, x2: rx, y2: ry, stroke: '#f59e0b', 'stroke-dasharray': '2,2' }));
         }
+
+        parent.appendChild(grp);
+    }
+
+
+    /* ── pivot gizmo ────────────────────────────────────────────────────── */
+
+    function _renderPivotGizmo (parent, pivot) {
+        var px = pivot.x, py = pivot.y;
+        var r = 8;
+        var grp = svg('g', { class: 'pivot-gizmo' });
+
+        // Outer circle
+        grp.appendChild(svg('circle', {
+            cx: px, cy: py, r: r,
+            fill: 'rgba(139,92,246,0.15)', stroke: '#8b5cf6',
+            'stroke-width': '2'
+        }));
+
+        // Crosshair lines
+        grp.appendChild(svg('line', {
+            x1: px - r - 3, y1: py, x2: px + r + 3, y2: py,
+            stroke: '#8b5cf6', 'stroke-width': '1.5'
+        }));
+        grp.appendChild(svg('line', {
+            x1: px, y1: py - r - 3, x2: px, y2: py + r + 3,
+            stroke: '#8b5cf6', 'stroke-width': '1.5'
+        }));
+
+        // Center dot
+        grp.appendChild(svg('circle', {
+            cx: px, cy: py, r: 2.5,
+            fill: '#8b5cf6', stroke: '#0d0d0f', 'stroke-width': '1'
+        }));
 
         parent.appendChild(grp);
     }

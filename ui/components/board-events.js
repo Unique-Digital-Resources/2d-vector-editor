@@ -387,6 +387,69 @@
         });
     }
 
+
+    // ── Pivot helper functions ────────────────────────────────────────────
+
+    function getActivePivotModifier(objectId) {
+        var registry = VectorEditor.app?.modifierRegistry;
+        if (!registry) return null;
+        var stack = registry.getStack(objectId);
+        for (var i = 0; i < stack.length; i++) {
+            var mod = stack[i];
+            if (mod.type === 'pivot-point' && mod.visible) return mod;
+        }
+        return null;
+    }
+
+    function computePivotPoint(objectId, modParams) {
+        var modMod = VectorEditor.Modifiers?.['pivot-point'];
+        if (!modMod || !modMod.computePivot) return null;
+        return modMod.computePivot(objectId, modParams);
+    }
+
+    // Scale all segments of an object relative to a pivot point
+    function applyPivotScale(pp, initData, pivot, scaleX, scaleY) {
+        for (var i = 0; i < initData.segments.length; i++) {
+            var seg = initData.segments[i];
+            var dxPt = seg.x - pivot.x;
+            var dyPt = seg.y - pivot.y;
+            pp.segments[i].point = new paper.Point(
+                pivot.x + dxPt * scaleX,
+                pivot.y + dyPt * scaleY
+            );
+            // Scale handles relative to anchor (they are already relative)
+            pp.segments[i].handleIn = new paper.Point(
+                seg.handleInX * scaleX,
+                seg.handleInY * scaleY
+            );
+            pp.segments[i].handleOut = new paper.Point(
+                seg.handleOutX * scaleX,
+                seg.handleOutY * scaleY
+            );
+        }
+    }
+
+    // Rotate all segments of an object relative to a pivot point
+    function applyPivotRotation(pp, initData, pivot, cos, sin) {
+        for (var i = 0; i < initData.segments.length; i++) {
+            var seg = initData.segments[i];
+            var dxPt = seg.x - pivot.x;
+            var dyPt = seg.y - pivot.y;
+            pp.segments[i].point = new paper.Point(
+                pivot.x + dxPt * cos - dyPt * sin,
+                pivot.y + dxPt * sin + dyPt * cos
+            );
+            pp.segments[i].handleIn = new paper.Point(
+                seg.handleInX * cos - seg.handleInY * sin,
+                seg.handleInX * sin + seg.handleInY * cos
+            );
+            pp.segments[i].handleOut = new paper.Point(
+                seg.handleOutX * cos - seg.handleOutY * sin,
+                seg.handleOutX * sin + seg.handleOutY * cos
+            );
+        }
+    }
+
     function handleResize(dx, dy) {
         const state = VectorEditor.state;
         const oldB  = state.initialBbox;
@@ -415,6 +478,18 @@
             const initData = state.initialBounds[objId];
             if (!pp || !initData) return;
 
+            // Check for active pivot-point modifier
+            const pivotMod = getActivePivotModifier(objId);
+            if (pivotMod && pivotMod.params.affectScale !== false) {
+                const pivot = computePivotPoint(objId, pivotMod.params);
+                if (pivot) {
+                    applyPivotScale(pp, initData, pivot, scaleX, scaleY);
+                    syncPathToCore(objId);
+                    return;
+                }
+            }
+
+            // Default: scale from bounding box origin
             initData.segments.forEach((seg, i) => {
                 const rx = seg.x - oldB.x;
                 const ry = seg.y - oldB.y;
@@ -443,6 +518,18 @@
             const initData = state.initialBounds[objId];
             if (!pp || !initData) return;
 
+            // Check for active pivot-point modifier
+            const pivotMod = getActivePivotModifier(objId);
+            if (pivotMod && pivotMod.params.affectRotation !== false) {
+                const pivot = computePivotPoint(objId, pivotMod.params);
+                if (pivot) {
+                    applyPivotRotation(pp, initData, pivot, cos, sin);
+                    syncPathToCore(objId);
+                    return;
+                }
+            }
+
+            // Default: rotate around bounding box center
             initData.segments.forEach((seg, i) => {
                 const ox = seg.x - center.x;
                 const oy = seg.y - center.y;
